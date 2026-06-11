@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pedido de Camisetas</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #222;
+    --accent: #e8ff00;
+    --accent2: #ff4d00;
+    --text: #f0f0f0;
+    --muted: #777;
+    --border: #2e2e2e;
+    --radius: 12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 520px;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 36px;
+  }
+  .header .badge {
+    display: inline-block;
+    background: var(--accent);
+    color: #000;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+  }
+  .header h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 56px;
+    line-height: 1;
+    letter-spacing: 2px;
+    color: var(--text);
+  }
+  .header h1 span { color: var(--accent); }
+  .header p {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 8px;
+  }
+
+  /* Progress */
+  .progress-wrap {
+    margin-bottom: 28px;
+  }
+  .progress-steps {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .step-dot {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+    color: var(--muted);
+    transition: all .3s;
+    position: relative;
+    z-index: 1;
+  }
+  .step-dot.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+  }
+  .step-dot.done {
+    background: var(--accent2);
+    border-color: var(--accent2);
+    color: #fff;
+  }
+  .progress-bar-bg {
+    height: 3px;
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    border-radius: 99px;
+    transition: width .4s ease;
+  }
+
+  /* Card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    display: none;
+  }
+  .card.active { display: block; }
+
+  .card-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .card h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 32px;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .card .hint {
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 24px;
+  }
+
+  /* Options grid */
+  .options-grid {
+    display: grid;
+    gap: 10px;
+  }
+  .options-grid.col2 { grid-template-columns: 1fr 1fr; }
+
+  .option-btn {
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: all .2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+  }
+  .option-btn:hover {
+    border-color: var(--accent);
+    background: #1f1f1f;
+  }
+  .option-btn.selected {
+    border-color: var(--accent);
+    background: rgba(232,255,0,.07);
+    color: var(--accent);
+  }
+  .option-btn .check {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-size: 10px;
+    transition: all .2s;
+  }
+  .option-btn.selected .check {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+  }
+  .option-btn .extra-tag {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+    font-weight: 700;
+    background: var(--accent2);
+    color: #fff;
+    padding: 2px 7px;
+    border-radius: 4px;
+  }
+
+  /* Number input */
+  .qty-control {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    width: fit-content;
+  }
+  .qty-btn {
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 22px;
+    width: 52px; height: 52px;
+    cursor: pointer;
+    transition: background .2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .qty-btn:hover { background: var(--border); }
+  .qty-display {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    min-width: 60px;
+    text-align: center;
+    color: var(--accent);
+    padding: 0 8px;
+  }
+
+  /* Text input */
+  .text-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .text-input:focus { border-color: var(--accent); }
+  .text-input::placeholder { color: var(--muted); }
+
+  .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .input-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: -8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* Toggle switch */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: border-color .2s;
+    user-select: none;
+  }
+  .toggle-row:hover { border-color: var(--accent); }
+  .toggle-row.on { border-color: var(--accent); }
+  .toggle-left { display: flex; flex-direction: column; gap: 2px; }
+  .toggle-left .t-name { font-size: 14px; font-weight: 500; }
+  .toggle-left .t-price {
+    font-size: 11px;
+    color: var(--accent2);
+    font-weight: 700;
+  }
+  .toggle-switch {
+    width: 44px; height: 24px;
+    background: var(--border);
+    border-radius: 99px;
+    position: relative;
+    transition: background .25s;
+  }
+  .toggle-row.on .toggle-switch { background: var(--accent); }
+  .toggle-knob {
+    width: 18px; height: 18px;
+    background: #fff;
+    border-radius: 50%;
+    position: absolute;
+    top: 3px; left: 3px;
+    transition: transform .25s;
+  }
+  .toggle-row.on .toggle-knob { transform: translateX(20px); }
+
+  /* Nav buttons */
+  .nav {
+    display: flex;
+    gap: 10px;
+    margin-top: 28px;
+  }
+  .btn-back {
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    color: var(--muted);
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 14px 20px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-back:hover { border-color: var(--muted); color: var(--text); }
+  .btn-next {
+    flex: 1;
+    background: var(--accent);
+    border: none;
+    border-radius: 10px;
+    color: #000;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    padding: 14px;
+    cursor: pointer;
+    transition: all .2s;
+    letter-spacing: .3px;
+  }
+  .btn-next:hover { background: #fff; }
+  .btn-next:disabled {
+    opacity: .4;
+    cursor: not-allowed;
+  }
+
+  /* Summary */
+  .summary-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .summary-table tr td {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .summary-table tr:last-child td { border-bottom: none; }
+  .summary-table td:first-child { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  .summary-table td:last-child { text-align: right; font-weight: 600; color: var(--text); }
+  .summary-table .price-row td:last-child { color: var(--accent); font-size: 16px; font-family: 'Bebas Neue', sans-serif; letter-spacing: 1px; }
+
+  .total-box {
+    background: var(--surface2);
+    border: 2px solid var(--accent);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 20px 0 0;
+  }
+  .total-box .t-label { font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); }
+  .total-box .t-amount {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 36px;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+
+  /* Success */
+  .success-wrap {
+    text-align: center;
+    padding: 20px 0;
+    display: none;
+  }
+  .success-wrap.active { display: block; }
+  .success-icon {
+    width: 72px; height: 72px;
+    background: var(--accent);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 32px;
+    color: #000;
+  }
+  .success-wrap h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 42px;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  .success-wrap p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+  .summary-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 24px 0;
+    text-align: left;
+  }
+  .btn-reset {
+    background: none;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    color: var(--muted);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 12px 24px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-reset:hover { border-color: var(--text); color: var(--text); }
+
+  .error-msg {
+    font-size: 12px;
+    color: var(--accent2);
+    margin-top: 6px;
+    display: none;
+  }
+  .error-msg.show { display: block; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <div class="badge">Formulario de Pedido</div>
+    <h1>PIDE TU<br><span>CAMISETA</span></h1>
+    <p>Completa los pasos y te contactamos para confirmar.</p>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-steps" id="progressSteps"></div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <!-- STEP 1: EQUIPO + EQUIPACIÓN + TEMPORADA -->
+  <div class="card active" id="step1">
+    <div class="card-label">Paso 1 de 7</div>
+    <h2>El equipo</h2>
+    <p class="hint">Rellena los tres campos para continuar.</p>
+
+    <div class="input-group" style="gap:20px;">
+      <label>¿Qué equipo quieres?</label>
+      <input class="text-input" id="equipoInput" type="text" placeholder="Ej: Real Madrid, FC Barcelona..." oninput="validateStep1()">
+
+      <label>¿Qué equipación quieres?</label>
+      <div class="options-grid col2" id="equipacionOptions">
+        <div class="option-btn" id="eq_1" onclick="selectEquipacion('1ª Equipación', this)"><span class="check">✓</span> 1ª</div>
+        <div class="option-btn" id="eq_2" onclick="selectEquipacion('2ª Equipación', this)"><span class="check">✓</span> 2ª</div>
+        <div class="option-btn" id="eq_3" onclick="selectEquipacion('3ª Equipación', this)"><span class="check">✓</span> 3ª</div>
+        <div class="option-btn" id="eq_4" onclick="selectEquipacion('4ª Equipación', this)"><span class="check">✓</span> 4ª</div>
+      </div>
+
+      <label>¿Qué temporada?</label>
+      <div class="options-grid col2" id="temporadaOptions">
+        <div class="option-btn" id="temp_ultima" onclick="selectTemporada('ultima', this)">
+          <span class="check">✓</span>
+          <span>Última temporada</span>
+        </div>
+        <div class="option-btn" id="temp_retro" onclick="selectTemporada('retro', this)">
+          <span class="check">✓</span>
+          <span>Retro</span>
+        </div>
+      </div>
+      <input
+        class="text-input"
+        id="temporadaRetroInput"
+        type="text"
+        placeholder="Ej: 2005/2006"
+        style="display:none;"
+        oninput="onRetroInput(event)"
+      >
+    </div>
+
+    <div class="nav" style="margin-top:28px;">
+      <button class="btn-next" id="next1" onclick="goNext(1)" disabled>Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- STEP 2: CAMISETA -->
+  <div class="card" id="step2">
+    <div class="card-label">Paso 2 de 7</div>
+    <h2>¿Qué camiseta?</h2>
+    <p class="hint">Elige el modelo que quieres pedir.</p>
+    <div class="options-grid" id="shirtOptions"></div>
+    <div class="nav">
+      <button class="btn-back" onclick="goBack(2)">← Atrás</button>
+      <button class="btn-next" id="next2" onclick="goNext(2)" disabled>Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: CANTIDAD -->
+  <div class="card" id="step3">
+    <div class="card-label">Paso 3 de 7</div>
+    <h2>¿Cuántas?</h2>
+    <p class="hint">Indica el número de unidades.</p>
+    <div class="qty-control">
+      <button class="qty-btn" onclick="changeQty(-1)">−</button>
+      <div class="qty-display" id="qtyDisplay">1</div>
+      <button class="qty-btn" onclick="changeQty(1)">+</button>
+    </div>
+    <div class="nav">
+      <button class="btn-back" onclick="goBack(3)">← Atrás</button>
+      <button class="btn-next" onclick="goNext(3)">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- STEP 4: TALLA -->
+  <div class="card" id="step4">
+    <div class="card-label">Paso 4 de 7</div>
+    <h2>Elige tu talla</h2>
+    <p class="hint">Las tallas 3XL y 4XL tienen un suplemento de +1€.</p>
+    <div class="options-grid col2" id="sizeOptions"></div>
+    <div class="nav">
+      <button class="btn-back" onclick="goBack(4)">← Atrás</button>
+      <button class="btn-next" id="next4" onclick="goNext(4)" disabled>Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- STEP 5: EXTRAS -->
+  <div class="card" id="step5">
+    <div class="card-label">Paso 5 de 7</div>
+    <h2>Personalización</h2>
+    <p class="hint">Cada opción añade +1€ al precio base.</p>
+    <div class="options-grid" id="extrasOptions"></div>
+    <div class="nav">
+      <button class="btn-back" onclick="goBack(5)">← Atrás</button>
+      <button class="btn-next" onclick="goNext(5)">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- STEP 6: DATOS PERSONALIZACIÓN -->
+  <div class="card" id="step6">
+    <div class="card-label">Paso 6 de 7</div>
+    <h2>Detalles</h2>
+    <p class="hint">Rellena solo los campos que hayas activado.</p>
+    <div class="options-grid" id="detailsFields"></div>
+    <div class="nav">
+      <button class="btn-back" onclick="goBack(6)">← Atrás</button>
+      <button class="btn-next" onclick="goNext(6)">Siguiente →</button>
+    </div>
+  </div>
+
+  <!-- STEP 7: CONTACTO + RESUMEN -->
+  <div class="card" id="step7">
+    <div class="card-label">Paso 7 de 7</div>
+    <h2>Tus datos de contacto</h2>
+    <p class="hint">Te avisamos cuando el pedido esté listo.</p>
+    <div class="input-group">
+      <label>Nombre completo</label>
+      <input class="text-input" id="contactName" type="text" placeholder="Ej: Carlos López" oninput="validateContact()">
+      <label>Teléfono</label>
+      <input class="text-input" id="contactPhone" type="tel" placeholder="Ej: 612 345 678" oninput="validateContact()">
+      <span class="error-msg" id="contactError">Por favor, rellena nombre y teléfono.</span>
+    </div>
+
+    <!-- RESUMEN PREVIO AL ENVÍO -->
+    <div style="margin-top:28px;">
+      <div class="card-label">Resumen del pedido</div>
+      <table class="summary-table" id="summaryTable"></table>
+      <div class="total-box">
+        <div>
+          <div class="t-label">Total estimado</div>
+          <small style="color:var(--muted);font-size:11px;">precio × cantidad</small>
+        </div>
+        <div class="t-amount" id="totalAmount">—</div>
+      </div>
+    </div>
+
+    <div class="nav">
+      <button class="btn-back" onclick="goBack(7)">← Atrás</button>
+      <button class="btn-next" id="submitBtn" onclick="submitOrder()" disabled>Confirmar pedido ✓</button>
+    </div>
+  </div>
+
+  <!-- SUCCESS -->
+  <div class="success-wrap" id="successScreen">
+    <div class="success-icon">✓</div>
+    <h2>¡PEDIDO ENVIADO!</h2>
+    <p>Hemos recibido tu solicitud.<br>Te contactaremos por teléfono para confirmar y coordinar el pago.</p>
+    <div class="summary-card" id="successSummary"></div>
+    <button class="btn-reset" onclick="resetForm()">Hacer otro pedido</button>
+  </div>
+
+</div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────
+const SHIRTS = [
+  { name: 'Versión Fan Adulto',    sub: '' },
+  { name: 'Versión Player Adulto', sub: '' },
+  { name: 'Versión Mujer',         sub: 'Bajo demanda' },
+  { name: 'Versión Niño',          sub: '' },
+];
+
+const SIZES = ['S','M','L','XL','2XL','3XL','4XL','NIÑO'];
+const BIG_SIZES = ['3XL','4XL'];
+
+const EXTRAS = [
+  { id: 'nombre',  label: 'Nombre en la camiseta', price: 1 },
+  { id: 'numero',  label: 'Número',                price: 1 },
+  { id: 'parches', label: 'Parches',               price: 1 },
+];
+
+const TOTAL_STEPS = 7;
+
+// ── STATE ────────────────────────────────────────────────
+let state = {
+  equipo: '',
+  equipacion: null,
+  temporada: null,
+  shirt: null,
+  qty: 1,
+  size: null,
+  ninoTalla: '',
+  extras: {},
+  extrasOn: {},
+  contactName: '',
+  contactPhone: '',
+  currentStep: 1
+};
+
+// ── INIT ─────────────────────────────────────────────────
+function init() {
+  buildProgress();
+  buildTemporadaSelect();
+  buildShirtOptions();
+  buildSizeOptions();
+  buildExtras();
+  updateProgress(1);
+}
+
+function buildTemporadaSelect() {
+  // Ahora son botones, nada que construir
+}
+
+function selectTemporada(tipo, el) {
+  document.querySelectorAll('#temporadaOptions .option-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  const retroInput = document.getElementById('temporadaRetroInput');
+  if (tipo === 'ultima') {
+    retroInput.style.display = 'none';
+    retroInput.value = '';
+    state.temporada = 'Última temporada';
+    validateStep1();
+  } else {
+    retroInput.style.display = 'block';
+    state.temporada = retroInput.value.trim();
+    validateStep1();
+    setTimeout(() => retroInput.focus(), 80);
+  }
+}
+
+function onRetroInput(e) {
+  e.stopPropagation();
+  state.temporada = e.target.value.trim();
+  // Asegurarse de que el botón retro sigue marcado como selected
+  const retroBtn = document.getElementById('temp_retro');
+  if (retroBtn) retroBtn.classList.add('selected');
+  validateStep1();
+}
+
+function selectEquipacion(name, el) {
+  document.querySelectorAll('#equipacionOptions .option-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  state.equipacion = name;
+  validateStep1();
+}
+
+function validateStep1() {
+  state.equipo = (document.getElementById('equipoInput').value || '').trim();
+  const ok = state.equipo.length > 1 && state.equipacion && state.temporada && state.temporada.length > 1;
+  document.getElementById('next1').disabled = !ok;
+}
+
+function buildProgress() {
+  const wrap = document.getElementById('progressSteps');
+  wrap.innerHTML = '';
+  for (let i = 1; i <= TOTAL_STEPS; i++) {
+    const d = document.createElement('div');
+    d.className = 'step-dot';
+    d.id = 'dot' + i;
+    d.textContent = i;
+    wrap.appendChild(d);
+  }
+}
+
+function updateProgress(step) {
+  for (let i = 1; i <= TOTAL_STEPS; i++) {
+    const d = document.getElementById('dot' + i);
+    d.className = 'step-dot' + (i < step ? ' done' : i === step ? ' active' : '');
+  }
+  const pct = ((step - 1) / (TOTAL_STEPS - 1)) * 100;
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+// ── SHIRT OPTIONS ─────────────────────────────────────────
+function buildShirtOptions() {
+  const grid = document.getElementById('shirtOptions');
+  grid.innerHTML = '';
+  SHIRTS.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    const subHtml = s.sub ? `<span style="display:block;font-size:11px;color:var(--accent2);font-weight:700;margin-top:2px;">${s.sub}</span>` : '';
+    btn.innerHTML = `<span class="check">✓</span><span>${s.name}${subHtml}</span>`;
+    btn.style.alignItems = 'flex-start';
+    btn.querySelector('.check').style.marginTop = '2px';
+    btn.onclick = () => selectShirt(s.name, btn);
+    grid.appendChild(btn);
+  });
+}
+
+function selectShirt(name, el) {
+  document.querySelectorAll('#shirtOptions .option-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  state.shirt = name;
+  document.getElementById('next2').disabled = false;
+}
+
+// ── SIZE OPTIONS ──────────────────────────────────────────
+function buildSizeOptions() {
+  const grid = document.getElementById('sizeOptions');
+  grid.innerHTML = '';
+  SIZES.forEach(sz => {
+    const isBig  = BIG_SIZES.includes(sz);
+    const isNino = sz === 'NIÑO';
+
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+
+    if (isNino) {
+      btn.innerHTML = `<span class="check">✓</span><span style="flex:1;">Niño</span>`;
+      btn.style.alignItems = 'center';
+      // input dentro del botón
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.id = 'ninoTallaInput';
+      inp.placeholder = 'Escribe la talla';
+      inp.style.cssText = `
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-family: 'Inter', sans-serif;
+        font-size: 13px;
+        padding: 5px 10px;
+        width: 130px;
+        outline: none;
+        display: none;
+      `;
+      inp.oninput = e => {
+        state.ninoTalla = e.target.value.trim();
+        e.stopPropagation();
+      };
+      inp.onclick = e => e.stopPropagation();
+      inp.onfocus = e => { inp.style.borderColor = 'var(--accent)'; e.stopPropagation(); };
+      inp.onblur  = () => inp.style.borderColor = 'var(--border)';
+      btn.appendChild(inp);
+      btn.onclick = () => {
+        selectSize('NIÑO', btn);
+        inp.style.display = 'block';
+        inp.focus();
+      };
+    } else {
+      btn.innerHTML = `<span class="check">✓</span> ${sz}` + (isBig ? `<span class="extra-tag">+1€</span>` : '');
+      btn.onclick = () => {
+        // ocultar input niño si se selecciona otra
+        const ninput = document.getElementById('ninoTallaInput');
+        if (ninput) ninput.style.display = 'none';
+        state.ninoTalla = '';
+        selectSize(sz, btn);
+      };
+    }
+    grid.appendChild(btn);
+  });
+}
+
+function selectSize(sz, el) {
+  document.querySelectorAll('#sizeOptions .option-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  state.size = sz;
+  document.getElementById('next4').disabled = false;
+}
+
+// ── EXTRAS ────────────────────────────────────────────────
+function buildExtras() {
+  const grid = document.getElementById('extrasOptions');
+  grid.innerHTML = '';
+  EXTRAS.forEach(ex => {
+    state.extrasOn[ex.id] = false;
+    const row = document.createElement('div');
+    row.className = 'toggle-row';
+    row.id = 'toggle_' + ex.id;
+    row.innerHTML = `
+      <div class="toggle-left">
+        <span class="t-name">${ex.label}</span>
+        <span class="t-price">+${ex.price}€</span>
+      </div>
+      <div class="toggle-switch"><div class="toggle-knob"></div></div>`;
+    row.onclick = () => toggleExtra(ex.id);
+    grid.appendChild(row);
+  });
+}
+
+function toggleExtra(id) {
+  state.extrasOn[id] = !state.extrasOn[id];
+  const row = document.getElementById('toggle_' + id);
+  row.classList.toggle('on', state.extrasOn[id]);
+}
+
+// ── DETAIL FIELDS ─────────────────────────────────────────
+function buildDetailFields() {
+  const wrap = document.getElementById('detailsFields');
+  wrap.innerHTML = '';
+  const active = EXTRAS.filter(e => state.extrasOn[e.id]);
+  if (active.length === 0) {
+    wrap.innerHTML = '<p style="color:var(--muted);font-size:14px;">No has activado ninguna personalización.</p>';
+    return;
+  }
+  active.forEach(ex => {
+    if (ex.id === 'nombre' || ex.id === 'numero') {
+      const lbl = document.createElement('label');
+      lbl.style.cssText = 'font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;';
+      lbl.textContent = ex.label;
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'text-input';
+      inp.id = 'detail_' + ex.id;
+      inp.value = state.extras[ex.id] || '';
+      inp.placeholder = ex.id === 'nombre' ? 'Ej: GARCIA' : 'Ej: 10';
+      inp.oninput = () => { state.extras[ex.id] = inp.value.trim(); };
+      wrap.appendChild(lbl);
+      wrap.appendChild(inp);
+    } else if (ex.id === 'parches') {
+      const lbl = document.createElement('label');
+      lbl.style.cssText = 'font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;';
+      lbl.textContent = 'Descripción de los parches';
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'text-input';
+      inp.id = 'detail_parches';
+      inp.value = state.extras['parches'] || '';
+      inp.placeholder = 'Ej: Escudo en el pecho izquierdo';
+      inp.oninput = () => { state.extras['parches'] = inp.value.trim(); };
+      wrap.appendChild(lbl);
+      wrap.appendChild(inp);
+    }
+  });
+}
+
+// ── QTY ───────────────────────────────────────────────────
+function changeQty(delta) {
+  state.qty = Math.max(1, state.qty + delta);
+  document.getElementById('qtyDisplay').textContent = state.qty;
+}
+
+// ── CONTACT VALIDATION ────────────────────────────────────
+function validateContact() {
+  state.contactName  = document.getElementById('contactName').value.trim();
+  state.contactPhone = document.getElementById('contactPhone').value.trim();
+  const ok = state.contactName.length > 1 && state.contactPhone.length > 6;
+  document.getElementById('submitBtn').disabled = !ok;
+  document.getElementById('contactError').classList.toggle('show', !ok && (state.contactName || state.contactPhone));
+  if (ok) buildSummaryTable();
+}
+
+// ── SUMMARY ───────────────────────────────────────────────
+function calcPrice() {
+  let base = 0;
+  if (BIG_SIZES.includes(state.size)) base += 1;
+  EXTRAS.forEach(e => { if (state.extrasOn[e.id]) base += e.price; });
+  return base;
+}
+
+function buildSummaryTable() {
+  const extrasList = EXTRAS.filter(e => state.extrasOn[e.id]).map(e => {
+    let val = state.extras[e.id] ? ` (${state.extras[e.id]})` : '';
+    return `${e.label}${val}`;
+  });
+  const addons = EXTRAS.filter(e => state.extrasOn[e.id]).length;
+  const sizeSurcharge = BIG_SIZES.includes(state.size) ? 1 : 0;
+  const basePrice = sizeSurcharge + addons;
+  const totalPerUnit = basePrice;
+  const totalAll = totalPerUnit * state.qty;
+
+  const sizeLabel = state.size === 'NIÑO' && state.ninoTalla
+    ? `Niño (${state.ninoTalla})`
+    : (state.size === 'NIÑO' ? 'Niño' : state.size);
+
+  document.getElementById('summaryTable').innerHTML = `
+    <tr><td>Equipo</td><td>${state.equipo}</td></tr>
+    <tr><td>Equipación</td><td>${state.equipacion}</td></tr>
+    <tr><td>Temporada</td><td>${state.temporada}</td></tr>
+    <tr><td>Versión</td><td>${state.shirt}</td></tr>
+    <tr><td>Talla</td><td>${sizeLabel}${sizeSurcharge ? ' <span style="color:var(--accent2);font-size:11px;">(+1€)</span>' : ''}</td></tr>
+    <tr><td>Cantidad</td><td>${state.qty} ud.</td></tr>
+    <tr><td>Personalizaciones</td><td>${extrasList.length ? extrasList.join(', ') : 'Ninguna'}</td></tr>
+    <tr><td>Contacto</td><td>${state.contactName} · ${state.contactPhone}</td></tr>
+    <tr class="price-row"><td>Suplementos / ud.</td><td>+${totalPerUnit}€</td></tr>
+  `;
+  document.getElementById('totalAmount').textContent = `+${totalAll}€ extras`;
+}
+
+// ── SUCCESS SCREEN ────────────────────────────────────────
+function buildSuccessSummary() {
+  const extrasList = EXTRAS.filter(e => state.extrasOn[e.id]).map(e => {
+    let val = state.extras[e.id] ? `: <strong>${state.extras[e.id]}</strong>` : '';
+    return `${e.label}${val}`;
+  });
+  const sizeDisplay = state.size === 'NIÑO' && state.ninoTalla
+    ? `Niño (${state.ninoTalla})`
+    : (state.size === 'NIÑO' ? 'Niño' : state.size);
+  document.getElementById('successSummary').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;font-size:14px;">
+      <div><span style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px;">Equipo / Equipación</span><br><strong>${state.equipo} — ${state.equipacion}</strong></div>
+      <div><span style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px;">Temporada</span><br><strong>${state.temporada}</strong></div>
+      <div><span style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px;">Versión / Talla / Cantidad</span><br><strong>${state.shirt} · ${sizeDisplay} × ${state.qty} ud.</strong></div>
+      ${extrasList.length ? `<div><span style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px;">Extras</span><br><strong>${extrasList.join('<br>')}</strong></div>` : ''}
+      <div><span style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px;">Contacto</span><br><strong>${state.contactName}</strong><br><strong>${state.contactPhone}</strong></div>
+    </div>
+  `;
+}
+
+// ── NAVIGATION ────────────────────────────────────────────
+function goNext(from) {
+  document.getElementById('step' + from).classList.remove('active');
+  const next = from + 1;
+  state.currentStep = next;
+
+  if (from === 5) buildDetailFields();
+  if (from === 6) {
+    buildSummaryTable();
+    document.getElementById('contactName').value = state.contactName;
+    document.getElementById('contactPhone').value = state.contactPhone;
+    document.getElementById('submitBtn').disabled = !(state.contactName.length > 1 && state.contactPhone.length > 6);
+  }
+
+  document.getElementById('step' + next).classList.add('active');
+  updateProgress(next);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function goBack(from) {
+  document.getElementById('step' + from).classList.remove('active');
+  const prev = from - 1;
+  state.currentStep = prev;
+  document.getElementById('step' + prev).classList.add('active');
+  updateProgress(prev);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function submitOrder() {
+  // ── PON AQUÍ TU URL DE GOOGLE APPS SCRIPT ──────────────
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzkSN8eGza34IVGqhrP_SmYy16mNAC66l3Wjc9vt-0-d6baXgEyc9qJsj-ZJK6PAur94w/exec';
+  // ────────────────────────────────────────────────────────
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+
+  const extrasList = EXTRAS.filter(e => state.extrasOn[e.id]).map(e => {
+    let val = state.extras[e.id] ? ` (${state.extras[e.id]})` : '';
+    return `${e.label}${val}`;
+  });
+  const sizeDisplay = state.size === 'NIÑO' && state.ninoTalla
+    ? `Niño (${state.ninoTalla})`
+    : (state.size === 'NIÑO' ? 'Niño' : state.size);
+
+  const payload = {
+    fecha:             new Date().toLocaleString('es-ES'),
+    equipo:            state.equipo,
+    equipacion:        state.equipacion,
+    temporada:         state.temporada,
+    camiseta:          state.shirt,
+    talla:             sizeDisplay,
+    cantidad:          state.qty,
+    nombre_camiseta:   state.extras['nombre']  || '',
+    numero_camiseta:   state.extras['numero']  || '',
+    parches:           state.extras['parches'] || (state.extrasOn['parches'] ? 'Sí' : ''),
+    contacto_nombre:   state.contactName,
+    contacto_telefono: state.contactPhone,
+    extras_resumen:    extrasList.join(', ') || 'Ninguno',
+  };
+
+  try {
+    await fetch(SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch(e) {
+    console.warn('Error enviando a Sheets:', e);
+  }
+
+  for (let i = 1; i <= TOTAL_STEPS; i++) {
+    const el = document.getElementById('step' + i);
+    if (el) el.classList.remove('active');
+  }
+  document.getElementById('progressWrap').style.display = 'none';
+  buildSuccessSummary();
+  document.getElementById('successScreen').classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetForm() {
+  state = {
+    equipo: '', equipacion: null, temporada: null,
+    shirt: null, qty: 1, size: null,
+    ninoTalla: '',
+    extras: {}, extrasOn: {},
+    contactName: '', contactPhone: '',
+    currentStep: 1
+  };
+  document.getElementById('progressWrap').style.display = 'block';
+  document.getElementById('successScreen').classList.remove('active');
+  document.getElementById('equipoInput').value = '';
+  document.querySelectorAll('#temporadaOptions .option-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('temporadaRetroInput').style.display = 'none';
+  document.getElementById('temporadaRetroInput').value = '';
+  document.querySelectorAll('#equipacionOptions .option-btn').forEach(b => b.classList.remove('selected'));
+  buildExtras();
+  buildShirtOptions();
+  buildSizeOptions();
+  document.getElementById('qtyDisplay').textContent = '1';
+  document.getElementById('contactName').value = '';
+  document.getElementById('contactPhone').value = '';
+  document.getElementById('next1').disabled = true;
+  document.getElementById('next2').disabled = true;
+  document.getElementById('next4').disabled = true;
+  document.getElementById('submitBtn').disabled = true;
+  for (let i = 2; i <= TOTAL_STEPS; i++) {
+    const el = document.getElementById('step' + i);
+    if (el) el.classList.remove('active');
+  }
+  document.getElementById('step1').classList.add('active');
+  updateProgress(1);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+init();
+</script>
+</body>
+</html>
