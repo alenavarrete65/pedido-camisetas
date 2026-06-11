@@ -458,31 +458,16 @@
 
       <label>¿Qué equipación quieres?</label>
       <div class="options-grid col2" id="equipacionOptions">
-        <div class="option-btn" id="eq_1" onclick="selectEquipacion('1ª Equipación', this)"><span class="check">✓</span> 1ª</div>
-        <div class="option-btn" id="eq_2" onclick="selectEquipacion('2ª Equipación', this)"><span class="check">✓</span> 2ª</div>
-        <div class="option-btn" id="eq_3" onclick="selectEquipacion('3ª Equipación', this)"><span class="check">✓</span> 3ª</div>
-        <div class="option-btn" id="eq_4" onclick="selectEquipacion('4ª Equipación', this)"><span class="check">✓</span> 4ª</div>
+        <button class="option-btn" id="eq_1" onclick="selectEquipacion('1ª Equipación', this)"><span class="check">✓</span> 1ª</button>
+        <button class="option-btn" id="eq_2" onclick="selectEquipacion('2ª Equipación', this)"><span class="check">✓</span> 2ª</button>
+        <button class="option-btn" id="eq_3" onclick="selectEquipacion('3ª Equipación', this)"><span class="check">✓</span> 3ª</button>
+        <button class="option-btn" id="eq_4" onclick="selectEquipacion('4ª Equipación', this)"><span class="check">✓</span> 4ª</button>
       </div>
 
       <label>¿Qué temporada?</label>
-      <div class="options-grid col2" id="temporadaOptions">
-        <div class="option-btn" id="temp_ultima" onclick="selectTemporada('ultima', this)">
-          <span class="check">✓</span>
-          <span>Última temporada</span>
-        </div>
-        <div class="option-btn" id="temp_retro" onclick="selectTemporada('retro', this)">
-          <span class="check">✓</span>
-          <span>Retro</span>
-        </div>
-      </div>
-      <input
-        class="text-input"
-        id="temporadaRetroInput"
-        type="text"
-        placeholder="Ej: 2005/2006"
-        style="display:none;"
-        oninput="onRetroInput(event)"
-      >
+      <select class="text-input" id="temporadaSelect" onchange="validateStep1()" style="cursor:pointer;appearance:auto;">
+        <option value="">— Selecciona temporada —</option>
+      </select>
     </div>
 
     <div class="nav" style="margin-top:28px;">
@@ -644,33 +629,13 @@ function init() {
 }
 
 function buildTemporadaSelect() {
-  // Ahora son botones, nada que construir
-}
-
-function selectTemporada(tipo, el) {
-  document.querySelectorAll('#temporadaOptions .option-btn').forEach(b => b.classList.remove('selected'));
-  el.classList.add('selected');
-  const retroInput = document.getElementById('temporadaRetroInput');
-  if (tipo === 'ultima') {
-    retroInput.style.display = 'none';
-    retroInput.value = '';
-    state.temporada = 'Última temporada';
-    validateStep1();
-  } else {
-    retroInput.style.display = 'block';
-    state.temporada = retroInput.value.trim();
-    validateStep1();
-    setTimeout(() => retroInput.focus(), 80);
+  const sel = document.getElementById('temporadaSelect');
+  for (let y = 2000; y <= 2026; y++) {
+    const opt = document.createElement('option');
+    opt.value = `${y}/${y+1}`;
+    opt.textContent = `${y}/${y+1}`;
+    sel.appendChild(opt);
   }
-}
-
-function onRetroInput(e) {
-  e.stopPropagation();
-  state.temporada = e.target.value.trim();
-  // Asegurarse de que el botón retro sigue marcado como selected
-  const retroBtn = document.getElementById('temp_retro');
-  if (retroBtn) retroBtn.classList.add('selected');
-  validateStep1();
 }
 
 function selectEquipacion(name, el) {
@@ -681,8 +646,9 @@ function selectEquipacion(name, el) {
 }
 
 function validateStep1() {
-  state.equipo = (document.getElementById('equipoInput').value || '').trim();
-  const ok = state.equipo.length > 1 && state.equipacion && state.temporada && state.temporada.length > 1;
+  state.equipo    = (document.getElementById('equipoInput').value || '').trim();
+  state.temporada = document.getElementById('temporadaSelect').value;
+  const ok = state.equipo.length > 1 && state.equipacion && state.temporada;
   document.getElementById('next1').disabled = !ok;
 }
 
@@ -964,7 +930,7 @@ function goBack(from) {
 
 async function submitOrder() {
   // ── PON AQUÍ TU URL DE GOOGLE APPS SCRIPT ──────────────
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz9zSIjtpJSFFNW11g-Bb-x4cZkZ43-L-aEmoLWuxGjxIraYMPbcNxyzj1EEawI4OghjQ/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbztYjL4lYM-7laCLESVFGAV319xuumqUzJE13OPSVpowQJq2mwmA5vNaFCuWfobDoD3jQ/exec';
   // ────────────────────────────────────────────────────────
 
   const btn = document.getElementById('submitBtn');
@@ -1028,9 +994,7 @@ function resetForm() {
   document.getElementById('progressWrap').style.display = 'block';
   document.getElementById('successScreen').classList.remove('active');
   document.getElementById('equipoInput').value = '';
-  document.querySelectorAll('#temporadaOptions .option-btn').forEach(b => b.classList.remove('selected'));
-  document.getElementById('temporadaRetroInput').style.display = 'none';
-  document.getElementById('temporadaRetroInput').value = '';
+  document.getElementById('temporadaSelect').value = '';
   document.querySelectorAll('#equipacionOptions .option-btn').forEach(b => b.classList.remove('selected'));
   buildExtras();
   buildShirtOptions();
