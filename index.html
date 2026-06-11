@@ -465,9 +465,44 @@
       </div>
 
       <label>¿Qué temporada?</label>
-      <select class="text-input" id="temporadaSelect" onchange="validateStep1()" style="cursor:pointer;appearance:auto;">
-        <option value="">— Selecciona temporada —</option>
-      </select>
+      <div class="options-grid col2" id="temporadaOptions">
+        <button class="option-btn" id="btn_ultima" onclick="selectTemporada('ultima', this)">
+          <span class="check">✓</span>
+          <span>
+            Última temporada
+            <span style="display:block;font-size:11px;color:var(--muted);font-weight:400;margin-top:2px;">2026/2027</span>
+          </span>
+        </button>
+        <button class="option-btn" id="btn_retro" onclick="selectTemporada('retro', this)" style="align-items:flex-start;">
+          <span class="check" style="margin-top:2px;">✓</span>
+          <span style="flex:1;">
+            Retro
+            <span style="display:block;font-size:11px;color:var(--muted);font-weight:400;margin-top:2px;">Temporada pasada</span>
+            <input
+              type="text"
+              id="temporadaRetroInput"
+              placeholder="Ej: 2015/2016"
+              style="
+                display:none;
+                margin-top:8px;
+                background:var(--bg);
+                border:1px solid var(--border);
+                border-radius:6px;
+                color:var(--text);
+                font-family:'Inter',sans-serif;
+                font-size:13px;
+                padding:6px 10px;
+                width:100%;
+                outline:none;
+              "
+              oninput="onRetroInput(event)"
+              onclick="event.stopPropagation()"
+              onfocus="this.style.borderColor='var(--accent)';event.stopPropagation()"
+              onblur="this.style.borderColor='var(--border)'"
+            />
+          </span>
+        </button>
+      </div>
     </div>
 
     <div class="nav" style="margin-top:28px;">
@@ -621,21 +656,31 @@ let state = {
 // ── INIT ─────────────────────────────────────────────────
 function init() {
   buildProgress();
-  buildTemporadaSelect();
   buildShirtOptions();
   buildSizeOptions();
   buildExtras();
   updateProgress(1);
 }
 
-function buildTemporadaSelect() {
-  const sel = document.getElementById('temporadaSelect');
-  for (let y = 2000; y <= 2026; y++) {
-    const opt = document.createElement('option');
-    opt.value = `${y}/${y+1}`;
-    opt.textContent = `${y}/${y+1}`;
-    sel.appendChild(opt);
+function selectTemporada(tipo, el) {
+  document.querySelectorAll('#temporadaOptions .option-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  const inp = document.getElementById('temporadaRetroInput');
+  if (tipo === 'ultima') {
+    state.temporada = '2026/2027';
+    inp.style.display = 'none';
+  } else {
+    // retro: mostrar input
+    inp.style.display = 'block';
+    state.temporada = inp.value.trim() || '';
+    setTimeout(() => inp.focus(), 50);
   }
+  validateStep1();
+}
+
+function onRetroInput(e) {
+  state.temporada = e.target.value.trim();
+  validateStep1();
 }
 
 function selectEquipacion(name, el) {
@@ -646,9 +691,8 @@ function selectEquipacion(name, el) {
 }
 
 function validateStep1() {
-  state.equipo    = (document.getElementById('equipoInput').value || '').trim();
-  state.temporada = document.getElementById('temporadaSelect').value;
-  const ok = state.equipo.length > 1 && state.equipacion && state.temporada;
+  state.equipo = (document.getElementById('equipoInput').value || '').trim();
+  const ok = state.equipo.length > 1 && state.equipacion && state.temporada && state.temporada.length > 1;
   document.getElementById('next1').disabled = !ok;
 }
 
@@ -930,7 +974,7 @@ function goBack(from) {
 
 async function submitOrder() {
   // ── PON AQUÍ TU URL DE GOOGLE APPS SCRIPT ──────────────
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw1zLFS8KJk4UNeh5fxwsL8SaFJgDqRr8AZ2quOi2brRMSnZdDAZusifTT3auofpi2SCw/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxI020I5hWd5M6UYDHITIMervD8qT39kda_0hNr9jXYSHodfYc2q_33qxTkawrM1oIBig/exec';
   // ────────────────────────────────────────────────────────
 
   const btn = document.getElementById('submitBtn');
@@ -994,7 +1038,9 @@ function resetForm() {
   document.getElementById('progressWrap').style.display = 'block';
   document.getElementById('successScreen').classList.remove('active');
   document.getElementById('equipoInput').value = '';
-  document.getElementById('temporadaSelect').value = '';
+  document.querySelectorAll('#temporadaOptions .option-btn').forEach(b => b.classList.remove('selected'));
+  const ri = document.getElementById('temporadaRetroInput');
+  if (ri) { ri.value = ''; ri.style.display = 'none'; }
   document.querySelectorAll('#equipacionOptions .option-btn').forEach(b => b.classList.remove('selected'));
   buildExtras();
   buildShirtOptions();
