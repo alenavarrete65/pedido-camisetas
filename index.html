@@ -462,6 +462,10 @@
         <button class="option-btn" id="eq_2" onclick="selectEquipacion('2ª Equipación', this)"><span class="check">✓</span> 2ª</button>
         <button class="option-btn" id="eq_3" onclick="selectEquipacion('3ª Equipación', this)"><span class="check">✓</span> 3ª</button>
         <button class="option-btn" id="eq_4" onclick="selectEquipacion('4ª Equipación', this)"><span class="check">✓</span> 4ª</button>
+        <button class="option-btn" id="eq_otro" onclick="selectEquipacion('Otro', this)" style="grid-column:1/-1;">
+          <span class="check">✓</span>
+          <span>Otro <span style="font-size:11px;color:var(--muted);font-weight:400;">(chándal, entreno...)</span></span>
+        </button>
       </div>
 
       <label>¿Qué temporada?</label>
@@ -1028,7 +1032,7 @@ function goBack(from) {
 
 async function submitOrder() {
   // ── PON AQUÍ TU URL DE GOOGLE APPS SCRIPT ──────────────
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx3z4QIdITZprgLNxiJaPfmWG6gTxY6WuWcY_D9Cu4J26f03wGT6LUTuYZB-IAySFVNhg/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwUl7Uua0-cPXwDF7dvNXS0LripSBErrdNiKU0-nJnJrSOxFnca64gWWCsNwDsfNoaN3w/exec';
   // ────────────────────────────────────────────────────────
 
   const btn = document.getElementById('submitBtn');
