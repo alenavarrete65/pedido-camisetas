@@ -510,12 +510,12 @@
     </div>
   </div>
 
-  <!-- STEP 2: CAMISETA -->
+  <!-- STEP 2: PRODUCTO -->
   <div class="card" id="step2">
     <div class="card-label">Paso 2 de 7</div>
-    <h2>¿Qué camiseta?</h2>
-    <p class="hint">Elige el modelo que quieres pedir.</p>
-    <div class="options-grid" id="shirtOptions"></div>
+    <h2>¿Qué producto?</h2>
+    <p class="hint">Elige el tipo de producto y el modelo.</p>
+    <div id="shirtOptions"></div>
     <div class="nav">
       <button class="btn-back" onclick="goBack(2)">← Atrás</button>
       <button class="btn-next" id="next2" onclick="goNext(2)" disabled>Siguiente →</button>
@@ -619,13 +619,26 @@
 
 <script>
 // ── CONFIG ──────────────────────────────────────────────
-const SHIRTS = [
-  { name: 'Versión Fan Adulto',    price: 15, sub: '' },
-  { name: 'Versión Player Adulto', price: 20, sub: '' },
-  { name: 'Versión Mujer',         price: 15, sub: 'Bajo demanda' },
-  { name: 'Versión Niño',          price: 20, sub: 'Viene con pantalón' },
-  { name: 'Versión Retro',         price: 20, sub: '', retro: true },
+const PRODUCTS = [
+  { category: '👕 Camisetas', items: [
+    { name: 'Versión Fan Adulto',    price: 15, sub: '' },
+    { name: 'Versión Player Adulto', price: 20, sub: '' },
+    { name: 'Versión Mujer',         price: 15, sub: 'Bajo demanda' },
+    { name: 'Versión Niño',          price: 20, sub: 'Viene con pantalón' },
+    { name: 'Versión Retro',         price: 20, sub: '', retro: true },
+  ]},
+  { category: '🏃 Conjunto Entrenamiento', items: [
+    { name: 'Conjunto Entrenamiento Con Mangas',  price: 25, sub: 'Incluye pantalón' },
+    { name: 'Conjunto Entrenamiento Sin Mangas',  price: 25, sub: 'Incluye pantalón' },
+  ]},
+  { category: '🧥 Chándal', items: [
+    { name: 'Chándal Media Cremallera',   price: 30,   sub: 'Incluye pantalón' },
+    { name: 'Chándal Cremallera Completa', price: 37.50, sub: 'Incluye pantalón' },
+  ]},
 ];
+
+// Para compatibilidad con calcPrice y Code.gs
+const SHIRTS = PRODUCTS.flatMap(p => p.items);
 
 const SIZES = ['S','M','L','XL','2XL','3XL','4XL','NIÑO'];
 const BIG_SIZES = ['3XL','4XL'];
@@ -718,41 +731,61 @@ function updateProgress(step) {
   document.getElementById('progressFill').style.width = pct + '%';
 }
 
-// ── SHIRT OPTIONS ─────────────────────────────────────────
+// ── PRODUCT OPTIONS ───────────────────────────────────────
 function buildShirtOptions() {
-  const grid = document.getElementById('shirtOptions');
-  grid.innerHTML = '';
-  SHIRTS.forEach(s => {
-    const btn = document.createElement('button');
-    btn.className = 'option-btn';
-    btn.style.alignItems = 'flex-start';
-    btn.style.flexDirection = 'column';
-    btn.style.gap = '6px';
+  const wrap = document.getElementById('shirtOptions');
+  wrap.innerHTML = '';
 
-    const subHtml = s.sub ? `<span style="display:block;font-size:11px;color:var(--accent2);font-weight:700;margin-top:1px;">${s.sub}</span>` : '';
-    const priceHtml = `<span style="position:absolute;right:12px;top:14px;font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--accent);letter-spacing:1px;">${s.price}€</span>`;
-
-    btn.innerHTML = `
-      <div style="display:flex;align-items:flex-start;gap:10px;width:100%;">
-        <span class="check" style="margin-top:2px;flex-shrink:0;">✓</span>
-        <span style="flex:1;">
-          ${s.name}
-          ${subHtml}
-        </span>
-        ${priceHtml}
-      </div>
+  PRODUCTS.forEach(cat => {
+    // Título de categoría
+    const catLabel = document.createElement('div');
+    catLabel.style.cssText = `
+      font-family:'Bebas Neue',sans-serif;
+      font-size:18px;
+      letter-spacing:1px;
+      color:var(--accent);
+      margin: 18px 0 8px;
+      padding-bottom:6px;
+      border-bottom:1px solid var(--border);
     `;
+    catLabel.textContent = cat.category;
+    wrap.appendChild(catLabel);
 
-    // Si es Retro, NO se pide temporada aquí (ya se indicó en el paso 1)
+    // Grid de opciones
+    const grid = document.createElement('div');
+    grid.className = 'options-grid';
+    grid.style.marginBottom = '4px';
 
-    btn.onclick = () => {
-      document.querySelectorAll('#shirtOptions .option-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-      state.shirt = s.name;
-      document.getElementById('next2').disabled = false;
-    };
+    cat.items.forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'option-btn';
+      btn.style.cssText = 'align-items:flex-start;flex-direction:column;gap:6px;position:relative;';
 
-    grid.appendChild(btn);
+      const subHtml = s.sub ? `<span style="display:block;font-size:11px;color:var(--accent2);font-weight:700;margin-top:1px;">${s.sub}</span>` : '';
+      const priceHtml = `<span style="position:absolute;right:12px;top:14px;font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--accent);letter-spacing:1px;">${s.price}€</span>`;
+
+      btn.innerHTML = `
+        <div style="display:flex;align-items:flex-start;gap:10px;width:100%;">
+          <span class="check" style="margin-top:2px;flex-shrink:0;">✓</span>
+          <span style="flex:1;">
+            ${s.name}
+            ${subHtml}
+          </span>
+          ${priceHtml}
+        </div>
+      `;
+
+      btn.onclick = () => {
+        document.querySelectorAll('#shirtOptions .option-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        state.shirt = s.name;
+        document.getElementById('next2').disabled = false;
+      };
+
+      grid.appendChild(btn);
+    });
+
+    wrap.appendChild(grid);
   });
 }
 
@@ -995,7 +1028,7 @@ function goBack(from) {
 
 async function submitOrder() {
   // ── PON AQUÍ TU URL DE GOOGLE APPS SCRIPT ──────────────
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwT0zGPDbRi8-r2Y2xetIcR-n-J-iuJzfj2YPt_EAXes0kk1gST-vrjL5abRj-j2HnSsA/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx3z4QIdITZprgLNxiJaPfmWG6gTxY6WuWcY_D9Cu4J26f03wGT6LUTuYZB-IAySFVNhg/exec';
   // ────────────────────────────────────────────────────────
 
   const btn = document.getElementById('submitBtn');
