@@ -640,6 +640,13 @@ const PRODUCTS = [
     { name: 'Chándal Media Cremallera',    price: 30,    sub: 'Incluye pantalón' },
     { name: 'Chándal Cremallera Completa', price: 37.50, sub: 'Incluye pantalón' },
   ]},
+  { category: '🏀 Camisetas NBA', items: [
+    { name: 'NBA Bordado',        price: 20,    sub: '' },
+    { name: 'NBA Termoimpresión', price: 22.50, sub: '' },
+  ]},
+  { category: '🏈 Camisetas NFL', items: [
+    { name: 'NFL',                price: 25,    sub: '' },
+  ]},
 ];
 
 // Para compatibilidad con calcPrice y Code.gs
@@ -1078,7 +1085,7 @@ function goBack(from) {
 
 async function submitOrder() {
   // ── PON AQUÍ TU URL DE GOOGLE APPS SCRIPT ──────────────
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykIfXgoB8KyFH68NJGtjxu_NxqKoX7KtTcA9DmYQbCqnWfPLnFvT-eQ5dyxSfQ0Y8MkQ/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxeCWJTKP0p7mnu6eT-5MBqcKL0gYko_CICsJbWN1-KjdoxwticbE_lbM2p7xF9T9uk0A/exec';
   // ────────────────────────────────────────────────────────
 
   const btn = document.getElementById('submitBtn');
