@@ -620,10 +620,11 @@
 <script>
 // ── CONFIG ──────────────────────────────────────────────
 const SHIRTS = [
-  { name: 'Versión Fan Adulto',    sub: '' },
-  { name: 'Versión Player Adulto', sub: '' },
-  { name: 'Versión Mujer',         sub: 'Bajo demanda' },
-  { name: 'Versión Niño',          sub: '' },
+  { name: 'Versión Fan Adulto',    price: 15, sub: '' },
+  { name: 'Versión Player Adulto', price: 20, sub: '' },
+  { name: 'Versión Mujer',         price: 15, sub: 'Bajo demanda' },
+  { name: 'Versión Niño',          price: 20, sub: 'Viene con pantalón' },
+  { name: 'Versión Retro',         price: 20, sub: '', retro: true },
 ];
 
 const SIZES = ['S','M','L','XL','2XL','3XL','4XL','NIÑO'];
@@ -724,20 +725,35 @@ function buildShirtOptions() {
   SHIRTS.forEach(s => {
     const btn = document.createElement('button');
     btn.className = 'option-btn';
-    const subHtml = s.sub ? `<span style="display:block;font-size:11px;color:var(--accent2);font-weight:700;margin-top:2px;">${s.sub}</span>` : '';
-    btn.innerHTML = `<span class="check">✓</span><span>${s.name}${subHtml}</span>`;
     btn.style.alignItems = 'flex-start';
-    btn.querySelector('.check').style.marginTop = '2px';
-    btn.onclick = () => selectShirt(s.name, btn);
+    btn.style.flexDirection = 'column';
+    btn.style.gap = '6px';
+
+    const subHtml = s.sub ? `<span style="display:block;font-size:11px;color:var(--accent2);font-weight:700;margin-top:1px;">${s.sub}</span>` : '';
+    const priceHtml = `<span style="position:absolute;right:12px;top:14px;font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--accent);letter-spacing:1px;">${s.price}€</span>`;
+
+    btn.innerHTML = `
+      <div style="display:flex;align-items:flex-start;gap:10px;width:100%;">
+        <span class="check" style="margin-top:2px;flex-shrink:0;">✓</span>
+        <span style="flex:1;">
+          ${s.name}
+          ${subHtml}
+        </span>
+        ${priceHtml}
+      </div>
+    `;
+
+    // Si es Retro, NO se pide temporada aquí (ya se indicó en el paso 1)
+
+    btn.onclick = () => {
+      document.querySelectorAll('#shirtOptions .option-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      state.shirt = s.name;
+      document.getElementById('next2').disabled = false;
+    };
+
     grid.appendChild(btn);
   });
-}
-
-function selectShirt(name, el) {
-  document.querySelectorAll('#shirtOptions .option-btn').forEach(b => b.classList.remove('selected'));
-  el.classList.add('selected');
-  state.shirt = name;
-  document.getElementById('next2').disabled = false;
 }
 
 // ── SIZE OPTIONS ──────────────────────────────────────────
@@ -889,7 +905,8 @@ function validateContact() {
 
 // ── SUMMARY ───────────────────────────────────────────────
 function calcPrice() {
-  let base = 0;
+  const shirtObj = SHIRTS.find(s => s.name === state.shirt);
+  let base = shirtObj ? shirtObj.price : 0;
   if (BIG_SIZES.includes(state.size)) base += 1;
   EXTRAS.forEach(e => { if (state.extrasOn[e.id]) base += e.price; });
   return base;
@@ -900,11 +917,15 @@ function buildSummaryTable() {
     let val = state.extras[e.id] ? ` (${state.extras[e.id]})` : '';
     return `${e.label}${val}`;
   });
-  const addons = EXTRAS.filter(e => state.extrasOn[e.id]).length;
+  const shirtObj = SHIRTS.find(s => s.name === state.shirt);
+  const shirtPrice = shirtObj ? shirtObj.price : 0;
   const sizeSurcharge = BIG_SIZES.includes(state.size) ? 1 : 0;
-  const basePrice = sizeSurcharge + addons;
-  const totalPerUnit = basePrice;
+  const extrasPrice = EXTRAS.filter(e => state.extrasOn[e.id]).reduce((a, e) => a + e.price, 0);
+  const totalPerUnit = shirtPrice + sizeSurcharge + extrasPrice;
   const totalAll = totalPerUnit * state.qty;
+
+  const retroTemp = state.shirtRetroTemp ? ` (${state.shirtRetroTemp})` : '';
+  const shirtLabel = state.shirt + (state.shirt === 'Versión Retro' ? retroTemp : '');
 
   const sizeLabel = state.size === 'NIÑO' && state.ninoTalla
     ? `Niño (${state.ninoTalla})`
@@ -914,14 +935,14 @@ function buildSummaryTable() {
     <tr><td>Equipo</td><td>${state.equipo}</td></tr>
     <tr><td>Equipación</td><td>${state.equipacion}</td></tr>
     <tr><td>Temporada</td><td>${state.temporada}</td></tr>
-    <tr><td>Versión</td><td>${state.shirt}</td></tr>
+    <tr><td>Versión</td><td>${shirtLabel}</td></tr>
     <tr><td>Talla</td><td>${sizeLabel}${sizeSurcharge ? ' <span style="color:var(--accent2);font-size:11px;">(+1€)</span>' : ''}</td></tr>
     <tr><td>Cantidad</td><td>${state.qty} ud.</td></tr>
     <tr><td>Personalizaciones</td><td>${extrasList.length ? extrasList.join(', ') : 'Ninguna'}</td></tr>
     <tr><td>Contacto</td><td>${state.contactName} · ${state.contactPhone}</td></tr>
-    <tr class="price-row"><td>Suplementos / ud.</td><td>+${totalPerUnit}€</td></tr>
+    <tr class="price-row"><td>Precio / ud.</td><td>${shirtPrice}€ base${sizeSurcharge ? ' +1€ talla' : ''}${extrasPrice ? ` +${extrasPrice}€ extras` : ''}</td></tr>
   `;
-  document.getElementById('totalAmount').textContent = `+${totalAll}€ extras`;
+  document.getElementById('totalAmount').textContent = `${totalAll}€ total`;
 }
 
 // ── SUCCESS SCREEN ────────────────────────────────────────
@@ -974,7 +995,7 @@ function goBack(from) {
 
 async function submitOrder() {
   // ── PON AQUÍ TU URL DE GOOGLE APPS SCRIPT ──────────────
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxI020I5hWd5M6UYDHITIMervD8qT39kda_0hNr9jXYSHodfYc2q_33qxTkawrM1oIBig/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwT0zGPDbRi8-r2Y2xetIcR-n-J-iuJzfj2YPt_EAXes0kk1gST-vrjL5abRj-j2HnSsA/exec';
   // ────────────────────────────────────────────────────────
 
   const btn = document.getElementById('submitBtn');
@@ -994,7 +1015,7 @@ async function submitOrder() {
     equipo:            state.equipo,
     equipacion:        state.equipacion,
     temporada:         state.temporada,
-    camiseta:          state.shirt,
+    camiseta:          state.shirt + (state.shirt === 'Versión Retro' && state.shirtRetroTemp ? ` (${state.shirtRetroTemp})` : ''),
     talla:             sizeDisplay,
     cantidad:          state.qty,
     nombre_camiseta:   state.extras['nombre']  || '',
@@ -1003,6 +1024,7 @@ async function submitOrder() {
     contacto_nombre:   state.contactName,
     contacto_telefono: state.contactPhone,
     extras_resumen:    extrasList.join(', ') || 'Ninguno',
+    precio_total:      calcPrice() * state.qty + '€',
   };
 
   try {
