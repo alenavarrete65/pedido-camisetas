@@ -629,6 +629,7 @@ const PRODUCTS = [
     { name: 'Versión Player Adulto', price: 20, sub: '' },
     { name: 'Versión Mujer',         price: 15, sub: 'Bajo demanda' },
     { name: 'Versión Niño',          price: 20, sub: 'Viene con pantalón' },
+    { name: 'Versión Bebé',          price: 10, sub: 'BODI' },
     { name: 'Versión Retro',         price: 20, sub: '', retro: true },
   ]},
   { category: '🏃 Conjunto Entrenamiento', items: [
@@ -636,7 +637,7 @@ const PRODUCTS = [
     { name: 'Conjunto Entrenamiento Sin Mangas',  price: 25, sub: 'Incluye pantalón' },
   ]},
   { category: '🧥 Chándal', items: [
-    { name: 'Chándal Media Cremallera',   price: 30,   sub: 'Incluye pantalón' },
+    { name: 'Chándal Media Cremallera',    price: 30,    sub: 'Incluye pantalón' },
     { name: 'Chándal Cremallera Completa', price: 37.50, sub: 'Incluye pantalón' },
   ]},
 ];
@@ -644,7 +645,7 @@ const PRODUCTS = [
 // Para compatibilidad con calcPrice y Code.gs
 const SHIRTS = PRODUCTS.flatMap(p => p.items);
 
-const SIZES = ['S','M','L','XL','2XL','3XL','4XL','NIÑO'];
+const SIZES = ['S','M','L','XL','2XL','3XL','4XL','NIÑO','BEBÉ'];
 const BIG_SIZES = ['3XL','4XL'];
 
 const EXTRAS = [
@@ -664,6 +665,7 @@ let state = {
   qty: 1,
   size: null,
   ninoTalla: '',
+  bebeTalla: '',
   extras: {},
   extrasOn: {},
   contactName: '',
@@ -807,7 +809,6 @@ function buildSizeOptions() {
     if (isNino) {
       btn.innerHTML = `<span class="check">✓</span><span style="flex:1;">Niño</span>`;
       btn.style.alignItems = 'center';
-      // input dentro del botón
       const inp = document.createElement('input');
       inp.type = 'text';
       inp.id = 'ninoTallaInput';
@@ -824,18 +825,50 @@ function buildSizeOptions() {
         outline: none;
         display: none;
       `;
-      inp.oninput = e => {
-        state.ninoTalla = e.target.value.trim();
-        e.stopPropagation();
-      };
+      inp.oninput = e => { state.ninoTalla = e.target.value.trim(); e.stopPropagation(); };
       inp.onclick = e => e.stopPropagation();
       inp.onfocus = e => { inp.style.borderColor = 'var(--accent)'; e.stopPropagation(); };
       inp.onblur  = () => inp.style.borderColor = 'var(--border)';
       btn.appendChild(inp);
       btn.onclick = () => {
         selectSize('NIÑO', btn);
+        const bebeWrap = document.getElementById('bebeTallaWrap');
+        if (bebeWrap) bebeWrap.style.display = 'none';
+        state.bebeTalla = '';
         inp.style.display = 'block';
         inp.focus();
+      };
+    } else if (sz === 'BEBÉ') {
+      btn.innerHTML = `<span class="check">✓</span><span style="flex:1;">Bebé</span>`;
+      btn.style.alignItems = 'flex-start';
+      btn.style.flexDirection = 'column';
+      btn.style.gap = '8px';
+
+      // Dos botones internos: 6 meses / 12 meses
+      const bebeWrap = document.createElement('div');
+      bebeWrap.id = 'bebeTallaWrap';
+      bebeWrap.style.cssText = 'display:none;gap:8px;width:100%;padding-left:24px;';
+      bebeWrap.innerHTML = `
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button id="bebe6m" style="
+            flex:1;padding:7px 0;border-radius:8px;border:1px solid var(--border);
+            background:var(--surface2);color:var(--text);font-family:'Inter',sans-serif;
+            font-size:13px;cursor:pointer;transition:all .2s;
+          " onclick="selectBebeTalla('6 meses', event)">6 meses</button>
+          <button id="bebe12m" style="
+            flex:1;padding:7px 0;border-radius:8px;border:1px solid var(--border);
+            background:var(--surface2);color:var(--text);font-family:'Inter',sans-serif;
+            font-size:13px;cursor:pointer;transition:all .2s;
+          " onclick="selectBebeTalla('12 meses', event)">12 meses</button>
+        </div>
+      `;
+      btn.appendChild(bebeWrap);
+      btn.onclick = () => {
+        selectSize('BEBÉ', btn);
+        const ninput = document.getElementById('ninoTallaInput');
+        if (ninput) ninput.style.display = 'none';
+        state.ninoTalla = '';
+        bebeWrap.style.display = 'block';
       };
     } else {
       btn.innerHTML = `<span class="check">✓</span> ${sz}` + (isBig ? `<span class="extra-tag">+1€</span>` : '');
@@ -855,7 +888,17 @@ function selectSize(sz, el) {
   document.querySelectorAll('#sizeOptions .option-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
   state.size = sz;
+  if (sz !== 'BEBÉ') state.bebeTalla = '';
   document.getElementById('next4').disabled = false;
+}
+
+function selectBebeTalla(mes, e) {
+  e.stopPropagation();
+  state.bebeTalla = mes;
+  document.getElementById('bebe6m').style.background  = mes === '6 meses'  ? 'var(--accent)' : 'var(--surface2)';
+  document.getElementById('bebe6m').style.color       = mes === '6 meses'  ? '#000' : 'var(--text)';
+  document.getElementById('bebe12m').style.background = mes === '12 meses' ? 'var(--accent)' : 'var(--surface2)';
+  document.getElementById('bebe12m').style.color      = mes === '12 meses' ? '#000' : 'var(--text)';
 }
 
 // ── EXTRAS ────────────────────────────────────────────────
@@ -966,7 +1009,10 @@ function buildSummaryTable() {
 
   const sizeLabel = state.size === 'NIÑO' && state.ninoTalla
     ? `Niño (${state.ninoTalla})`
-    : (state.size === 'NIÑO' ? 'Niño' : state.size);
+    : state.size === 'NIÑO' ? 'Niño'
+    : state.size === 'BEBÉ' && state.bebeTalla ? `Bebé (${state.bebeTalla})`
+    : state.size === 'BEBÉ' ? 'Bebé'
+    : state.size;
 
   document.getElementById('summaryTable').innerHTML = `
     <tr><td>Equipo</td><td>${state.equipo}</td></tr>
@@ -1032,7 +1078,7 @@ function goBack(from) {
 
 async function submitOrder() {
   // ── PON AQUÍ TU URL DE GOOGLE APPS SCRIPT ──────────────
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwUl7Uua0-cPXwDF7dvNXS0LripSBErrdNiKU0-nJnJrSOxFnca64gWWCsNwDsfNoaN3w/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykIfXgoB8KyFH68NJGtjxu_NxqKoX7KtTcA9DmYQbCqnWfPLnFvT-eQ5dyxSfQ0Y8MkQ/exec';
   // ────────────────────────────────────────────────────────
 
   const btn = document.getElementById('submitBtn');
@@ -1045,7 +1091,10 @@ async function submitOrder() {
   });
   const sizeDisplay = state.size === 'NIÑO' && state.ninoTalla
     ? `Niño (${state.ninoTalla})`
-    : (state.size === 'NIÑO' ? 'Niño' : state.size);
+    : state.size === 'NIÑO' ? 'Niño'
+    : state.size === 'BEBÉ' && state.bebeTalla ? `Bebé (${state.bebeTalla})`
+    : state.size === 'BEBÉ' ? 'Bebé'
+    : state.size;
 
   const payload = {
     fecha:             new Date().toLocaleString('es-ES'),
