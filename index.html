@@ -694,7 +694,7 @@ const EXTRAS = [
 ];
 
 const TOTAL_STEPS = 7;
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEp9_gI-Iz2fO3GiGpzrZEXd7VPOFnvzMooTPF9ITMclVKBtTJgk0hMUDyC4NcmN4AFw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbztx7p4ZwBjV3TZ1OcKRfyOnjw_0wRRfY5exaTXnq3xtyp9yzc1Q58afRTuj2YwMrt1BQ/exec';
 let BIG_EXTRA = 1;
 
 // ── STATE ────────────────────────────────────────────────
@@ -1099,7 +1099,8 @@ function orderCard(o) {
   const done = o.estado === 'Pedido';
   return `<div class="summary-card" style="margin:0 0 10px;padding:14px;font-size:13px;${done ? 'opacity:.55' : ''}">
     <div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(o.cliente)} · ${esc(o.telefono)}</b><span style="color:var(--accent)">${fmt(o.total)}</span></div>
-    <div style="color:var(--muted);margin:4px 0">${esc(o.fecha)} · Lote ${o.lote}</div>
+    <div style="color:var(--muted);margin:4px 0;display:flex;align-items:center;gap:8px">${esc(o.fecha)} · Lote
+      <select style="padding:4px 6px;font-size:12px" onchange="moveLote(${o.row},this.value)">${Array.from({length: adm.lote}, (_, i) => i + 1).map(n => `<option value="${n}" ${n === o.lote ? 'selected' : ''}>${n}${n === adm.lote ? ' (abierto)' : ''}</option>`).join('')}</select></div>
     <div>${esc(o.equipo)} — ${esc(o.equipacion)} (${esc(o.temporada)})</div>
     <div>${esc(o.producto)} · ${esc(o.talla)} × ${o.cantidad}</div>
     ${o.extras && o.extras !== 'Ninguno' ? `<div>${esc(o.extras)}</div>` : ''}
@@ -1191,6 +1192,13 @@ function renderLoteList() {
     <label`).replace(/<\/div>$/, `<button class="btn-back" style="width:100%;margin-top:8px;padding:10px;font-size:12px" onclick="verLote(${n})">Ver pedidos de este lote</button></div>`);
     }).join('')}`).join('');
   document.getElementById('loteList').innerHTML = html || '<p class="hint">No hay lotes que coincidan.</p>';
+}
+async function moveLote(row, lote) {
+  try {
+    const d = await api({ action: 'setOrderLote', password: adminPass, row, lote });
+    if (!d.ok) throw new Error(d.error);
+    adm.orders.find(o => o.row === row).lote = +lote; renderOrders();
+  } catch (e) { alert('Error: ' + e.message); renderOrders(); }
 }
 async function setEstado(row, estado) {
   if (estado === 'Anulado' && !confirm('¿Anular este pedido? Dejará de contar en los totales.')) return;

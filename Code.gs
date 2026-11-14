@@ -57,6 +57,7 @@ function doPost(e) {
     if (d.action === 'listOrders') { checkAdmin_(d.password); return listOrders_(); }
     if (d.action === 'setStatus') { checkAdmin_(d.password); return setStatus_(d.row, d.estado); }
     if (d.action === 'setLoteInfo') { checkAdmin_(d.password); return setLoteInfo_(d.lote, d.tracking, d.entrega); }
+    if (d.action === 'setOrderLote') { checkAdmin_(d.password); return setOrderLote_(d.row, d.lote); }
     if (d.action === 'closeLote') { checkAdmin_(d.password); return closeLote_(); }
     return saveOrder_(d);
   } catch (err) {
@@ -223,6 +224,15 @@ function setStatus_(row, estado) {
   if (!(row >= 2 && row <= sh.getLastRow())) throw new Error('Fila no válida');
   const cE = metaCols_(sh)[0];
   sh.getRange(row, cE).setValue(estado);
+  return json_({ ok: true });
+}
+
+function setOrderLote_(row, lote) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Pedidos');
+  row = parseInt(row); lote = parseInt(lote);
+  if (!(row >= 2 && row <= sh.getLastRow())) throw new Error('Fila no válida');
+  if (!(lote >= 1 && lote <= currentLote_())) throw new Error('Lote no válido');
+  sh.getRange(row, metaCols_(sh)[1]).setValue(lote);
   return json_({ ok: true });
 }
 
