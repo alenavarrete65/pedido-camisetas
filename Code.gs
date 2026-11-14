@@ -58,6 +58,7 @@ function doPost(e) {
     if (d.action === 'setStatus') { checkAdmin_(d.password); return setStatus_(d.row, d.estado); }
     if (d.action === 'setLoteInfo') { checkAdmin_(d.password); return setLoteInfo_(d.lote, d.tracking, d.entrega); }
     if (d.action === 'setOrderLote') { checkAdmin_(d.password); return setOrderLote_(d.row, d.lote); }
+    if (d.action === 'setPaid') { checkAdmin_(d.password); return setPaid_(d.row, d.pagado); }
     if (d.action === 'closeLote') { checkAdmin_(d.password); return closeLote_(); }
     return saveOrder_(d);
   } catch (err) {
@@ -172,7 +173,7 @@ function currentLote_() { return Number(PropertiesService.getScriptProperties().
 
 // Las columnas de la app se buscan por su nombre en la fila 1 (y se crean al final si no existen),
 // así nunca pisan datos que ya tuvieras en tu hoja.
-const META = ['Estado pedido', 'Lote pedido', 'Coste pedido'];
+const META = ['Estado pedido', 'Lote pedido', 'Coste pedido', 'Pagado pedido'];
 function metaCols_(sh) {
   const lastCol = Math.max(sh.getLastColumn(), 16);
   const head = sh.getRange(1, 1, 1, lastCol).getValues()[0];
@@ -197,7 +198,7 @@ function listOrders_() {
   const costs = getPrices_().costs;
   const base = { ok: true, lote: currentLote_(), lotes: lotesMeta_(), costs: costs, orders: [] };
   if (!sh || sh.getLastRow() < 2) return json_(base);
-  const [cE, cL, cC] = metaCols_(sh);
+  const [cE, cL, cC, cP] = metaCols_(sh);
   const tz = Session.getScriptTimeZone();
   base.orders = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues().map((r, i) => {
     const qty = Number(r[6]) || 1;
@@ -210,6 +211,7 @@ function listOrders_() {
       total: num_(r[13]),
       estado: r[cE - 1] || 'Pendiente',
       lote: Number(r[cL - 1]) || 1,
+      pagado: r[cP - 1] === 'Sí',
       // si el pedido no tiene coste guardado, se calcula con el coste actual del producto
       coste: stored > 0 ? stored : Math.round((costs[r[4]] || 0) * qty * 100) / 100
     };
@@ -224,6 +226,14 @@ function setStatus_(row, estado) {
   if (!(row >= 2 && row <= sh.getLastRow())) throw new Error('Fila no válida');
   const cE = metaCols_(sh)[0];
   sh.getRange(row, cE).setValue(estado);
+  return json_({ ok: true });
+}
+
+function setPaid_(row, pagado) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Pedidos');
+  row = parseInt(row);
+  if (!(row >= 2 && row <= sh.getLastRow())) throw new Error('Fila no válida');
+  sh.getRange(row, metaCols_(sh)[3]).setValue(pagado ? 'Sí' : '');
   return json_({ ok: true });
 }
 

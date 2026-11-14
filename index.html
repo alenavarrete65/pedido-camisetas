@@ -694,7 +694,7 @@ const EXTRAS = [
 ];
 
 const TOTAL_STEPS = 7;
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbztx7p4ZwBjV3TZ1OcKRfyOnjw_0wRRfY5exaTXnq3xtyp9yzc1Q58afRTuj2YwMrt1BQ/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwMSIsRShzoIDKuFsW_j-wgU8gJJOtCetXQB5aIEDmJr7JYHtJ8YzWUQofPRXfugU6Ijg/exec';
 let BIG_EXTRA = 1;
 
 // ── STATE ────────────────────────────────────────────────
@@ -1104,7 +1104,8 @@ function orderCard(o) {
     <div>${esc(o.equipo)} — ${esc(o.equipacion)} (${esc(o.temporada)})</div>
     <div>${esc(o.producto)} · ${esc(o.talla)} × ${o.cantidad}</div>
     ${o.extras && o.extras !== 'Ninguno' ? `<div>${esc(o.extras)}</div>` : ''}
-    <div style="display:flex;gap:8px;margin-top:10px">
+    <button class="${o.pagado ? 'btn-next' : 'btn-back'}" style="width:100%;margin-top:10px;padding:9px;font-size:12px" onclick="setPagado(${o.row},${!o.pagado})">${o.pagado ? '✓ Pagado (pulsa para desmarcar)' : '💶 Sin pagar · marcar como pagado'}</button>
+    <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn-next" style="padding:9px;font-size:12px" onclick="setEstado(${o.row},'${done ? 'Pendiente' : 'Pedido'}')">${done ? '↩ Volver a pendiente' : '✓ Marcar como pedido'}</button>
       <button class="btn-back" style="padding:9px 12px;font-size:12px" onclick="setEstado(${o.row},'Anulado')">Anular</button>
     </div></div>`;
@@ -1122,6 +1123,7 @@ function renderOrders() {
   const sel = byMes ? adm.month : adm.view;
   const list = adm.orders.filter(o => o.estado !== 'Anulado' && (byMes ? (sel === 'all' || mesKey(o.fecha) === sel) : o.lote === sel));
   const ventas = list.reduce((a, o) => a + o.total, 0), coste = list.reduce((a, o) => a + o.coste, 0);
+  const cobrado = list.filter(o => o.pagado).reduce((a, o) => a + o.total, 0);
   const shown = adm.pend ? list.filter(o => o.estado === 'Pendiente') : list;
   const line = (l, v) => `<div style="display:flex;justify-content:space-between"><span>${l}</span><b>${v}</b></div>`;
   const opts = (byMes ? '<option value="all"' + (sel === 'all' ? ' selected' : '') + '>Todos los meses</option>' : '') +
@@ -1133,7 +1135,7 @@ function renderOrders() {
     </div>
     <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:12px"><input type="checkbox" ${adm.pend ? 'checked' : ''} onchange="adm.pend=this.checked;renderOrders()"> Solo pendientes de pedir</label>
     <div class="total-box" style="margin:0 0 12px;flex-direction:column;align-items:stretch;gap:4px;font-size:13px">
-      ${line('Pedidos', list.length)}${line('Ventas', fmt(ventas))}${line('Coste', fmt(coste))}${line('Beneficio', fmt(ventas - coste))}
+      ${line('Pedidos', list.length)}${line('Ventas', fmt(ventas))}${line('Coste', fmt(coste))}${line('Beneficio', fmt(ventas - coste))}${line('Cobrado', fmt(cobrado))}${line('Por cobrar', fmt(ventas - cobrado))}
     </div>
     ${!byMes ? loteBox(adm.view) : ''}
     ${shown.map(orderCard).join('') || '<p class="hint">No hay pedidos.</p>'}
@@ -1199,6 +1201,13 @@ async function moveLote(row, lote) {
     if (!d.ok) throw new Error(d.error);
     adm.orders.find(o => o.row === row).lote = +lote; renderOrders();
   } catch (e) { alert('Error: ' + e.message); renderOrders(); }
+}
+async function setPagado(row, pagado) {
+  try {
+    const d = await api({ action: 'setPaid', password: adminPass, row, pagado });
+    if (!d.ok) throw new Error(d.error);
+    adm.orders.find(o => o.row === row).pagado = pagado; renderOrders();
+  } catch (e) { alert('Error: ' + e.message); }
 }
 async function setEstado(row, estado) {
   if (estado === 'Anulado' && !confirm('¿Anular este pedido? Dejará de contar en los totales.')) return;
