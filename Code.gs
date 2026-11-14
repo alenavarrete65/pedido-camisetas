@@ -59,6 +59,7 @@ function doPost(e) {
     if (d.action === 'setLoteInfo') { checkAdmin_(d.password); return setLoteInfo_(d.lote, d.tracking, d.entrega); }
     if (d.action === 'setOrderLote') { checkAdmin_(d.password); return setOrderLote_(d.row, d.lote); }
     if (d.action === 'setPaid') { checkAdmin_(d.password); return setPaid_(d.row, d.pagado); }
+    if (d.action === 'editOrder') { checkAdmin_(d.password); return editOrder_(d.row, d.f || {}); }
     if (d.action === 'closeLote') { checkAdmin_(d.password); return closeLote_(); }
     return saveOrder_(d);
   } catch (err) {
@@ -207,7 +208,7 @@ function listOrders_() {
       row: i + 2,
       fecha: r[0] instanceof Date ? Utilities.formatDate(r[0], tz, 'dd/MM/yyyy HH:mm') : String(r[0]),
       equipo: r[1], equipacion: r[2], temporada: r[3], producto: r[4], talla: r[5], cantidad: qty,
-      extras: r[12], cliente: r[10], telefono: r[11],
+      extras: r[12], cliente: r[10], telefono: r[11], nombre: r[7], numero: r[8], parches: r[9],
       total: num_(r[13]),
       estado: r[cE - 1] || 'Pendiente',
       lote: Number(r[cL - 1]) || 1,
@@ -226,6 +227,31 @@ function setStatus_(row, estado) {
   if (!(row >= 2 && row <= sh.getLastRow())) throw new Error('Fila no válida');
   const cE = metaCols_(sh)[0];
   sh.getRange(row, cE).setValue(estado);
+  return json_({ ok: true });
+}
+
+// Corrige los datos de un pedido ya hecho. No toca: fecha, ID, estado, lote ni pagado. No reenvía Telegram.
+function editOrder_(row, f) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Pedidos');
+  row = parseInt(row);
+  if (!(row >= 2 && row <= sh.getLastRow())) throw new Error('Fila no válida');
+  const t = v => { v = String(v == null ? '' : v).slice(0, 200); return /^[=+\-@]/.test(v) ? "'" + v : v; };
+  const money = (v, name) => { v = Number(String(v).replace(',', '.')); if (!(v >= 0 && v <= 10000)) throw new Error('Importe no válido: ' + name); return Math.round(v * 100) / 100; };
+  const qty = Math.min(99, Math.max(1, parseInt(f.cantidad) || 1));
+  const total = money(f.total, 'total'), coste = money(f.coste, 'coste');
+  const cC = metaCols_(sh)[2];
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    // columnas 2..13: Equipo, Equipación, Temporada, Producto, Talla, Cantidad, Nombre, Número, Parches, Cliente, Teléfono, Extras
+    sh.getRange(row, 2, 1, 12).setValues([[t(f.equipo), t(f.equipacion), t(f.temporada), t(f.producto), t(f.talla), qty,
+      t(f.nombre), t(f.numero), t(f.parches), t(f.cliente), t(f.telefono), t(f.extras)]]);
+    sh.getRange(row, 14).setValue(total).setNumberFormat('#,##0.00 "€"');
+    sh.getRange(row, cC).setValue(coste).setNumberFormat('#,##0.00 "€"');
+  } finally {
+    lock.releaseLock();
+  }
+  syncLotesSheet_();
   return json_({ ok: true });
 }
 

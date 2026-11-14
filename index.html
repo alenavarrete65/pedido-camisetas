@@ -653,6 +653,7 @@
   </div>
 </div></div>
 
+<div class="modal" id="editModal" style="z-index:10"><div class="modal-box" id="editBox"></div></div>
 <script>
 // ── CONFIG ──────────────────────────────────────────────
 const PRODUCTS = [
@@ -694,7 +695,7 @@ const EXTRAS = [
 ];
 
 const TOTAL_STEPS = 7;
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby-h3jLm0x7gXY8GAfkAs88XyIIe8j__drTgvFLh24phrTf8JstpjHa5l7DEDAGWN4g5g/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz8OjY0kAjRbstI4Pn1aPJNFARrw7FxhyH0q1OfuTpIJlA7QtxtDliQf7t2PkZBZ_vTQw/exec';
 let BIG_EXTRA = 1;
 
 // ── STATE ────────────────────────────────────────────────
@@ -1105,6 +1106,7 @@ function orderCard(o) {
     <div>${esc(o.producto)} · ${esc(o.talla)} × ${o.cantidad}</div>
     ${o.extras && o.extras !== 'Ninguno' ? `<div>${esc(o.extras)}</div>` : ''}
     <button class="${o.pagado ? 'btn-next' : 'btn-back'}" style="width:100%;margin-top:10px;padding:9px;font-size:12px" onclick="setPagado(${o.row},${!o.pagado})">${o.pagado ? '✓ Pagado (pulsa para desmarcar)' : '💶 Sin pagar · marcar como pagado'}</button>
+    <button class="btn-back" style="width:100%;margin-top:8px;padding:9px;font-size:12px" onclick="openEdit(${o.row})">✏️ Editar pedido</button>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn-next" style="padding:9px;font-size:12px" onclick="setEstado(${o.row},'${done ? 'Pendiente' : 'Pedido'}')">${done ? '↩ Volver a pendiente' : '✓ Marcar como pedido'}</button>
       <button class="btn-back" style="padding:9px 12px;font-size:12px" onclick="setEstado(${o.row},'Anulado')">Anular</button>
@@ -1221,6 +1223,33 @@ async function setPagado(row, pagado) {
     if (!d.ok) throw new Error(d.error);
     adm.orders.find(o => o.row === row).pagado = pagado; renderOrders();
   } catch (e) { alert('Error: ' + e.message); }
+}
+const EDIT_FIELDS = [['equipo', 'Equipo'], ['equipacion', 'Equipación'], ['temporada', 'Temporada'], ['producto', 'Producto', 'select'],
+  ['talla', 'Talla'], ['cantidad', 'Cantidad', 'number'], ['nombre', 'Nombre en la camiseta'], ['numero', 'Número'], ['parches', 'Parches'],
+  ['extras', 'Extras (resumen)'], ['cliente', 'Cliente'], ['telefono', 'Teléfono'], ['total', 'Total (€)', 'number'], ['coste', 'Coste (€)', 'number']];
+function openEdit(row) {
+  const o = adm.orders.find(x => x.row === row); if (!o) return;
+  const names = SHIRTS.map(s => s.name); if (o.producto && !names.includes(o.producto)) names.unshift(o.producto);
+  const field = ([k, label, type]) => `<label style="display:block;color:var(--muted);font-size:12px;margin:10px 0 4px">${label}</label>` +
+    (type === 'select'
+      ? `<select class="text-input" id="ed_${k}" style="padding:10px">${names.map(n => `<option ${n === o[k] ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>`
+      : `<input class="text-input" id="ed_${k}" style="padding:10px" ${type === 'number' ? 'type="number" step="0.01" min="0"' : ''} value="${esc(o[k] == null ? '' : o[k])}">`);
+  document.getElementById('editBox').innerHTML = `<h2>EDITAR PEDIDO</h2>
+    <p class="hint" style="margin:0 0 4px">Cambia lo que esté mal. El precio y el coste no se recalculan solos: ajústalos tú si hace falta. No se vuelve a enviar nada a Telegram.</p>
+    ${EDIT_FIELDS.map(field).join('')}
+    <div class="nav" style="margin-top:16px"><button class="btn-back" onclick="closeEdit()">Cancelar</button><button class="btn-next" id="editSave" onclick="saveEdit(${row})">Guardar cambios</button></div>`;
+  document.getElementById('editModal').classList.add('show');
+}
+function closeEdit() { document.getElementById('editModal').classList.remove('show'); }
+async function saveEdit(row) {
+  const f = {}; EDIT_FIELDS.forEach(([k]) => f[k] = document.getElementById('ed_' + k).value);
+  const btn = document.getElementById('editSave'); btn.disabled = true; btn.textContent = 'Guardando...';
+  try {
+    const d = await api({ action: 'editOrder', password: adminPass, row, f });
+    if (!d.ok) throw new Error(d.error);
+    Object.assign(adm.orders.find(o => o.row === row), f, { cantidad: Math.min(99, Math.max(1, parseInt(f.cantidad) || 1)), total: Number(String(f.total).replace(',', '.')), coste: Number(String(f.coste).replace(',', '.')) });
+    closeEdit(); renderOrders();
+  } catch (e) { alert('Error: ' + e.message); btn.disabled = false; btn.textContent = 'Guardar cambios'; }
 }
 async function setEstado(row, estado) {
   if (estado === 'Anulado' && !confirm('¿Anular este pedido? Dejará de contar en los totales.')) return;
