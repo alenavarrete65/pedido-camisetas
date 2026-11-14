@@ -259,6 +259,7 @@ function closeLote_() {
   m[old] = Object.assign({}, m[old], { cerrado: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy') });
   saveLotesMeta_(m);
   PropertiesService.getScriptProperties().setProperty('LOTE', String(n));
+  syncLotesSheet_();
   return json_({ ok: true, lote: n, lotes: m });
 }
 
@@ -270,6 +271,7 @@ function setLoteInfo_(lote, tracking, entrega) {
   const m = lotesMeta_();
   m[lote] = Object.assign({}, m[lote], { tracking: String(tracking || '').trim().slice(0, 100), entrega: entrega });
   saveLotesMeta_(m);
+  syncLotesSheet_();
   return json_({ ok: true, lotes: m });
 }
 
@@ -299,5 +301,44 @@ function separarPedidosYa() {
   saveLotesMeta_(m);
   props.setProperty('LOTE', String(nuevo));
   props.setProperty('SEPARADO', '1');
+  syncLotesSheet_();
   Logger.log('Lote ' + actual + ' cerrado con ' + cerrados + ' pedidos. Lote ' + nuevo + ' abierto con ' + pendientes + ' pendientes.');
+}
+
+// ═══ Copia de los lotes en la hoja (pestaña "Lotes") ═══
+// Es solo una copia para consultar: se reescribe sola al cerrar un lote o guardar seguimiento/entrega.
+// Pedidos, Ventas y Cobrado son fórmulas, así que siempre están al día. No edites esta pestaña a mano.
+// Ejecútala UNA vez a mano para crearla por primera vez.
+function sincronizarLotes() { syncLotesSheet_(); }
+
+function syncLotesSheet_() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sp = ss.getSheetByName('Pedidos');
+    if (!sp) return;
+    const sh = ss.getSheetByName('Lotes') || ss.insertSheet('Lotes');
+    const [cE, cL, , cP] = metaCols_(sp);
+    const col = c => sp.getRange(1, c).getA1Notation().replace(/\d+/g, '');
+    const L = col(cL), E = col(cE), P = col(cP);
+    const m = lotesMeta_(), cur = currentLote_();
+    const fd = iso => { const x = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return x ? x[3] + '/' + x[2] + '/' + x[1] : ''; };
+    const rows = [];
+    for (let n = 1; n <= cur; n++) {
+      const i = m[n] || {}, r = n + 1;
+      rows.push([n, n === cur ? 'Abierto' : 'Cerrado', i.cerrado || '', i.tracking || '', fd(i.entrega),
+        '=COUNTIFS(Pedidos!' + L + ':' + L + ',A' + r + ',Pedidos!' + E + ':' + E + ',"<>Anulado")',
+        '=SUMIFS(Pedidos!N:N,Pedidos!' + L + ':' + L + ',A' + r + ',Pedidos!' + E + ':' + E + ',"<>Anulado")',
+        '=SUMIFS(Pedidos!N:N,Pedidos!' + L + ':' + L + ',A' + r + ',Pedidos!' + E + ':' + E + ',"<>Anulado",Pedidos!' + P + ':' + P + ',"Sí")']);
+    }
+    sh.clear();
+    sh.getRange(1, 1, 1, 8).setValues([['Lote', 'Estado', 'Fecha cierre', 'Nº seguimiento', 'Entrega prevista', 'Pedidos', 'Ventas', 'Cobrado']]).setFontWeight('bold');
+    sh.getRange(2, 1, rows.length, 8).setNumberFormat('@');          // todo como texto...
+    sh.getRange(2, 1, rows.length, 1).setNumberFormat('General');    // ...menos el nº de lote
+    sh.getRange(2, 6, rows.length, 3).setNumberFormat('General');    // ...y las fórmulas
+    sh.getRange(2, 1, rows.length, 8).setValues(rows);
+    sh.getRange(2, 7, rows.length, 2).setNumberFormat('#,##0.00 "€"');
+    sh.setFrozenRows(1);
+  } catch (err) {
+    Logger.log('No se pudo actualizar la pestaña Lotes: ' + err.message);
+  }
 }

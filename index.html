@@ -694,7 +694,7 @@ const EXTRAS = [
 ];
 
 const TOTAL_STEPS = 7;
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwMSIsRShzoIDKuFsW_j-wgU8gJJOtCetXQB5aIEDmJr7JYHtJ8YzWUQofPRXfugU6Ijg/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby-h3jLm0x7gXY8GAfkAs88XyIIe8j__drTgvFLh24phrTf8JstpjHa5l7DEDAGWN4g5g/exec';
 let BIG_EXTRA = 1;
 
 // ── STATE ────────────────────────────────────────────────
@@ -1075,7 +1075,7 @@ async function adminLogin() {
     document.getElementById('adminEditor').style.display = 'block';
   } catch (e) { err.textContent = e.message === 'Failed to fetch' ? 'Sin conexión con el servidor' : e.message; }
 }
-let adm = { orders: [], lotes: {}, q: '', lote: 1, costs: {}, view: 0, mode: 'lote', month: '', pend: false, loaded: false };
+let adm = { orders: [], lotes: {}, unpaid: false, q: '', ml: 'all', lote: 1, costs: {}, view: 0, mode: 'lote', month: '', pend: false, loaded: false };
 async function adminTab(t) {
   document.getElementById('adminOrders').style.display = t === 'orders' ? 'block' : 'none';
   document.getElementById('adminPrices').style.display = t === 'prices' ? 'block' : 'none';
@@ -1113,33 +1113,46 @@ function orderCard(o) {
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 function mesKey(f) { const m = String(f).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? m[3] + '-' + m[2].padStart(2, '0') : 'sin-fecha'; }
 function mesLabel(k) { const [y, m] = k.split('-'); return MESES[+m - 1] ? MESES[+m - 1] + ' ' + y : 'Sin fecha'; }
-function setSel(v) { if (adm.mode === 'mes') adm.month = v; else adm.view = +v; renderOrders(); }
+function setSel(v) { if (adm.mode === 'mes') { adm.month = v; adm.ml = 'all'; } else adm.view = +v; renderOrders(); }
 function renderOrders() {
   const byMes = adm.mode === 'mes';
+  const todos = Array.from({ length: adm.lote }, (_, i) => i + 1);
   const keys = byMes
-    ? [...new Set(adm.orders.map(o => mesKey(o.fecha)))].sort().reverse()
-    : [...new Set([...adm.orders.map(o => o.lote), adm.lote])].sort((a, b) => b - a);
+    ? [...new Set(todos.map(loteMonth))].sort().reverse()
+    : todos.slice().reverse();
   if (byMes && adm.month !== 'all' && !keys.includes(adm.month)) adm.month = keys[0] || 'all';
   const sel = byMes ? adm.month : adm.view;
-  const list = adm.orders.filter(o => o.estado !== 'Anulado' && (byMes ? (sel === 'all' || mesKey(o.fecha) === sel) : o.lote === sel));
+  const lotesMes = byMes ? todos.filter(n => sel === 'all' || loteMonth(n) === sel).reverse() : [];
+  if (byMes && adm.ml !== 'all' && !lotesMes.includes(+adm.ml)) adm.ml = 'all';
+  const list = adm.orders.filter(o => o.estado !== 'Anulado' && (byMes
+    ? lotesMes.includes(o.lote) && (adm.ml === 'all' || o.lote === +adm.ml)
+    : o.lote === sel));
   const ventas = list.reduce((a, o) => a + o.total, 0), coste = list.reduce((a, o) => a + o.coste, 0);
   const cobrado = list.filter(o => o.pagado).reduce((a, o) => a + o.total, 0);
-  const shown = adm.pend ? list.filter(o => o.estado === 'Pendiente') : list;
+  const shown = list.filter(o => (!adm.pend || o.estado === 'Pendiente') && (!adm.unpaid || !o.pagado));
   const line = (l, v) => `<div style="display:flex;justify-content:space-between"><span>${l}</span><b>${v}</b></div>`;
+  const loteName = n => 'Lote ' + n + (n === adm.lote ? ' (abierto)' : ' (cerrado)');
   const opts = (byMes ? '<option value="all"' + (sel === 'all' ? ' selected' : '') + '>Todos los meses</option>' : '') +
-    keys.map(k => `<option value="${k}" ${String(k) === String(sel) ? 'selected' : ''}>${byMes ? mesLabel(k) : 'Lote ' + k + (k === adm.lote ? ' (actual)' : '')}</option>`).join('');
+    keys.map(k => `<option value="${k}" ${String(k) === String(sel) ? 'selected' : ''}>${byMes ? mesLabel(k) : loteName(k)}</option>`).join('');
+  const optsLote = byMes
+    ? `<option value="all" ${adm.ml === 'all' ? 'selected' : ''}>Todos los lotes</option>` +
+      lotesMes.map(n => `<option value="${n}" ${+adm.ml === n ? 'selected' : ''}>${loteName(n)}</option>`).join('')
+    : '';
+  const loteActivo = byMes ? (adm.ml === 'all' ? 0 : +adm.ml) : adm.view;
   document.getElementById('adminOrders').innerHTML = `
     <div style="display:flex;gap:10px;margin-bottom:10px">
       <select class="text-input" style="padding:10px" onchange="adm.mode=this.value;renderOrders()"><option value="lote" ${byMes ? '' : 'selected'}>Por lote</option><option value="mes" ${byMes ? 'selected' : ''}>Por mes</option></select>
       <select class="text-input" style="padding:10px" onchange="setSel(this.value)">${opts}</select>
     </div>
+    ${byMes ? `<select class="text-input" style="padding:10px;margin-bottom:10px" onchange="adm.ml=this.value;renderOrders()">${optsLote}</select>` : ''}
     <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:12px"><input type="checkbox" ${adm.pend ? 'checked' : ''} onchange="adm.pend=this.checked;renderOrders()"> Solo pendientes de pedir</label>
+    <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:12px"><input type="checkbox" ${adm.unpaid ? 'checked' : ''} onchange="adm.unpaid=this.checked;renderOrders()"> Solo sin pagar</label>
     <div class="total-box" style="margin:0 0 12px;flex-direction:column;align-items:stretch;gap:4px;font-size:13px">
       ${line('Pedidos', list.length)}${line('Ventas', fmt(ventas))}${line('Coste', fmt(coste))}${line('Beneficio', fmt(ventas - coste))}${line('Cobrado', fmt(cobrado))}${line('Por cobrar', fmt(ventas - cobrado))}
     </div>
-    ${!byMes ? loteBox(adm.view) : ''}
+    ${loteActivo ? loteBox(loteActivo) : ''}
     ${shown.map(orderCard).join('') || '<p class="hint">No hay pedidos.</p>'}
-    ${!byMes && adm.view === adm.lote ? '<button class="btn-reset" style="width:100%;margin-top:14px" onclick="closeLote()">Cerrar lote y empezar otro</button>' : ''}`;
+    ${loteActivo === adm.lote ? '<button class="btn-reset" style="width:100%;margin-top:14px" onclick="closeLote()">Cerrar lote y empezar otro</button>' : ''}`;
 }
 function fdate(iso) { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? m[3] + '/' + m[2] + '/' + m[1] : ''; }
 function loteBox(n) {
