@@ -56,7 +56,7 @@ function doPost(e) {
     if (d.action === 'setPrices') { checkAdmin_(d.password); return setPrices_(d.prices); }
     if (d.action === 'listOrders') { checkAdmin_(d.password); return listOrders_(); }
     if (d.action === 'setStatus') { checkAdmin_(d.password); return setStatus_(d.row, d.estado); }
-    if (d.action === 'setLoteInfo') { checkAdmin_(d.password); return setLoteInfo_(d.lote, d.tracking, d.entrega); }
+    if (d.action === 'setLoteInfo') { checkAdmin_(d.password); return setLoteInfo_(d.lote, d.tracking, d.entrega, d.enviado, d.pedido); }
     if (d.action === 'setOrderLote') { checkAdmin_(d.password); return setOrderLote_(d.row, d.lote); }
     if (d.action === 'setPaid') { checkAdmin_(d.password); return setPaid_(d.row, d.pagado); }
     if (d.action === 'editOrder') { checkAdmin_(d.password); return editOrder_(d.row, d.f || {}); }
@@ -174,7 +174,7 @@ function currentLote_() { return Number(PropertiesService.getScriptProperties().
 
 // Las columnas de la app se buscan por su nombre en la fila 1 (y se crean al final si no existen),
 // así nunca pisan datos que ya tuvieras en tu hoja.
-const META = ['Estado pedido', 'Lote pedido', 'Coste pedido', 'Pagado pedido'];
+const META = ['Estado pedido', 'Lote pedido', 'Coste pedido', 'Pagado pedido', 'Precio manual', 'Precio estándar'];
 function metaCols_(sh) {
   const lastCol = Math.max(sh.getLastColumn(), 16);
   const head = sh.getRange(1, 1, 1, lastCol).getValues()[0];
@@ -199,7 +199,7 @@ function listOrders_() {
   const costs = getPrices_().costs;
   const base = { ok: true, lote: currentLote_(), lotes: lotesMeta_(), costs: costs, orders: [] };
   if (!sh || sh.getLastRow() < 2) return json_(base);
-  const [cE, cL, cC, cP] = metaCols_(sh);
+  const [cE, cL, cC, cP, cM, cS] = metaCols_(sh);
   const tz = Session.getScriptTimeZone();
   base.orders = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues().map((r, i) => {
     const qty = Number(r[6]) || 1;
@@ -213,6 +213,8 @@ function listOrders_() {
       estado: r[cE - 1] || 'Pendiente',
       lote: Number(r[cL - 1]) || 1,
       pagado: r[cP - 1] === 'Sí',
+      manual: r[cM - 1] === 'Sí',
+      estandar: num_(r[cS - 1]) || null,
       // si el pedido no tiene coste guardado, se calcula con el coste actual del producto
       coste: stored > 0 ? stored : Math.round((costs[r[4]] || 0) * qty * 100) / 100
     };
@@ -239,7 +241,9 @@ function editOrder_(row, f) {
   const money = (v, name) => { v = Number(String(v).replace(',', '.')); if (!(v >= 0 && v <= 10000)) throw new Error('Importe no válido: ' + name); return Math.round(v * 100) / 100; };
   const qty = Math.min(99, Math.max(1, parseInt(f.cantidad) || 1));
   const total = money(f.total, 'total'), coste = money(f.coste, 'coste');
-  const cC = metaCols_(sh)[2];
+  const mc = metaCols_(sh), cC = mc[2], cM = mc[4], cS = mc[5];
+  const manual = f.manual === 'Sí';
+  const estandar = manual ? money(f.estandar, 'precio estándar') : '';
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
@@ -248,6 +252,8 @@ function editOrder_(row, f) {
       t(f.nombre), t(f.numero), t(f.parches), t(f.cliente), t(f.telefono), t(f.extras)]]);
     sh.getRange(row, 14).setValue(total).setNumberFormat('#,##0.00 "€"');
     sh.getRange(row, cC).setValue(coste).setNumberFormat('#,##0.00 "€"');
+    sh.getRange(row, cM).setValue(manual ? 'Sí' : '');                 // precio de venta personalizado
+    sh.getRange(row, cS).setValue(estandar).setNumberFormat('#,##0.00 "€"'); // precio estándar de referencia
   } finally {
     lock.releaseLock();
   }
@@ -289,13 +295,21 @@ function closeLote_() {
   return json_({ ok: true, lote: n, lotes: m });
 }
 
-function setLoteInfo_(lote, tracking, entrega) {
+function setLoteInfo_(lote, tracking, entrega, enviado, pedido) {
   lote = parseInt(lote);
-  if (!(lote >= 1 && lote <= currentLote_())) throw new Error('Lote no válido');
-  entrega = String(entrega || '');
-  if (entrega && !/^\d{4}-\d{2}-\d{2}$/.test(entrega)) throw new Error('Fecha no válida');
-  const m = lotesMeta_();
-  m[lote] = Object.assign({}, m[lote], { tracking: String(tracking || '').trim().slice(0, 100), entrega: entrega });
+  const cur = currentLote_();
+  if (!(lote >= 1 && lote <= cur)) throw new Error('Lote no válido');
+  const iso = v => { v = String(v || ''); if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new Error('Fecha no válida'); return v; };
+  const tz = Session.getScriptTimeZone();
+  tracking = String(tracking || '').trim().slice(0, 100);
+  entrega = iso(entrega); enviado = iso(enviado); pedido = iso(pedido);
+  const m = lotesMeta_(), prev = m[lote] || {};
+  // Fecha de envío: si pones seguimiento y no hay fecha, se pone la de hoy (el vendedor lo acaba de enviar)
+  if (!enviado && tracking) enviado = prev.enviado || Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  const info = Object.assign({}, prev, { tracking: tracking, entrega: entrega, enviado: enviado });
+  // Fecha de pedido al vendedor = fecha de cierre (solo se puede cambiar en lotes ya cerrados)
+  if (pedido && lote < cur) info.cerrado = pedido.slice(8, 10) + '/' + pedido.slice(5, 7) + '/' + pedido.slice(0, 4);
+  m[lote] = info;
   saveLotesMeta_(m);
   syncLotesSheet_();
   return json_({ ok: true, lotes: m });
@@ -351,18 +365,18 @@ function syncLotesSheet_() {
     const rows = [];
     for (let n = 1; n <= cur; n++) {
       const i = m[n] || {}, r = n + 1;
-      rows.push([n, n === cur ? 'Abierto' : 'Cerrado', i.cerrado || '', i.tracking || '', fd(i.entrega),
+      rows.push([n, n === cur ? 'Abierto' : 'Cerrado', i.cerrado || '', i.tracking || '', fd(i.enviado), fd(i.entrega),
         '=COUNTIFS(Pedidos!' + L + ':' + L + ',A' + r + ',Pedidos!' + E + ':' + E + ',"<>Anulado")',
         '=SUMIFS(Pedidos!N:N,Pedidos!' + L + ':' + L + ',A' + r + ',Pedidos!' + E + ':' + E + ',"<>Anulado")',
         '=SUMIFS(Pedidos!N:N,Pedidos!' + L + ':' + L + ',A' + r + ',Pedidos!' + E + ':' + E + ',"<>Anulado",Pedidos!' + P + ':' + P + ',"Sí")']);
     }
     sh.clear();
-    sh.getRange(1, 1, 1, 8).setValues([['Lote', 'Estado', 'Fecha cierre', 'Nº seguimiento', 'Entrega prevista', 'Pedidos', 'Ventas', 'Cobrado']]).setFontWeight('bold');
-    sh.getRange(2, 1, rows.length, 8).setNumberFormat('@');          // todo como texto...
+    sh.getRange(1, 1, 1, 9).setValues([['Lote', 'Estado', 'Fecha pedido (cierre)', 'Nº seguimiento', 'Enviado por el vendedor', 'Entrega prevista', 'Pedidos', 'Ventas', 'Cobrado']]).setFontWeight('bold');
+    sh.getRange(2, 1, rows.length, 9).setNumberFormat('@');          // todo como texto...
     sh.getRange(2, 1, rows.length, 1).setNumberFormat('General');    // ...menos el nº de lote
-    sh.getRange(2, 6, rows.length, 3).setNumberFormat('General');    // ...y las fórmulas
-    sh.getRange(2, 1, rows.length, 8).setValues(rows);
-    sh.getRange(2, 7, rows.length, 2).setNumberFormat('#,##0.00 "€"');
+    sh.getRange(2, 7, rows.length, 3).setNumberFormat('General');    // ...y las fórmulas
+    sh.getRange(2, 1, rows.length, 9).setValues(rows);
+    sh.getRange(2, 8, rows.length, 2).setNumberFormat('#,##0.00 "€"');
     sh.setFrozenRows(1);
   } catch (err) {
     Logger.log('No se pudo actualizar la pestaña Lotes: ' + err.message);

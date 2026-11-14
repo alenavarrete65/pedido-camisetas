@@ -644,7 +644,7 @@
   </div>
   <div id="adminEditor" style="display:none">
     <div class="nav" style="margin:0 0 14px"><button class="btn-next" onclick="adminTab('orders')">Pedidos</button><button class="btn-next" onclick="adminTab('lotes')">Lotes</button><button class="btn-next" onclick="adminTab('prices')">Precios</button><button class="btn-back" onclick="closeAdmin()">Cerrar</button></div>
-    <div style="color:var(--muted);font-size:10px;text-align:right;margin:-8px 0 10px">versión 14-nov-F</div>
+    <div style="color:var(--muted);font-size:10px;text-align:right;margin:-8px 0 10px">versión 14-nov-G</div>
     <div id="adminOrders"></div>
     <div id="adminLotes" style="display:none"></div>
     <div id="adminPrices" style="display:none">
@@ -1107,6 +1107,7 @@ function orderCard(o) {
     <div>${esc(o.producto)} · ${esc(o.talla)} × ${o.cantidad}</div>
     <div style="margin-top:6px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.04);line-height:1.6">
       ${[['Nombre', o.nombre, 'sin nombre'], ['Número', o.numero, 'sin número'], ['Parches', o.parches, 'sin parche']].map(([l, v, vacio]) => `<div><span style="color:var(--muted)">${l}:</span> ${v ? esc(v) : '<span style="color:var(--muted)">(' + vacio + ')</span>'}</div>`).join('')}
+      ${o.manual ? `<div style="color:var(--accent)">💲 Precio personalizado <span style="color:var(--muted)">(estándar ${fmt(o.estandar || 0)})</span></div>` : ''}
       <div><span style="color:var(--muted)">Extras cobrados:</span> ${o.extras && o.extras !== 'Ninguno' ? esc(o.extras) : '<span style="color:var(--muted)">(ninguno)</span>'}</div>
     </div>
     <button class="${o.pagado ? 'btn-next' : 'btn-back'}" style="width:100%;margin-top:10px;padding:9px;font-size:12px" onclick="setPagado(${o.row},${!o.pagado})">${o.pagado ? '✓ Pagado (pulsa para desmarcar)' : '💶 Sin pagar · marcar como pagado'}</button>
@@ -1161,25 +1162,44 @@ function renderOrders() {
     ${loteActivo === adm.lote ? '<button class="btn-reset" style="width:100%;margin-top:14px" onclick="closeLote()">Cerrar lote y empezar otro</button>' : ''}`;
 }
 function fdate(iso) { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? m[3] + '/' + m[2] + '/' + m[1] : ''; }
+function esDate(s) { const m = String(s || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m ? new Date(+m[3], +m[2] - 1, +m[1], 12) : null; }
+function isoDate(s) { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? new Date(+m[1], +m[2] - 1, +m[3], 12) : null; }
+function esToIso(s) { const m = String(s || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m ? m[3] + '-' + m[2] + '-' + m[1] : ''; }
+function dias(a, b) { const n = Math.round((b - a) / 864e5); return n + (Math.abs(n) === 1 ? ' día' : ' días'); }
+function plazos(m) {
+  const p = esDate(m.cerrado), e = isoDate(m.enviado), n = isoDate(m.entrega), hoy = new Date(); hoy.setHours(12, 0, 0, 0);
+  const row = (l, v) => `<div style="display:flex;justify-content:space-between;gap:8px"><span>${l}</span><b>${v}</b></div>`;
+  const out = [];
+  if (p && e) out.push(row('Pedido → enviado por el vendedor', dias(p, e)));
+  if (e && n) out.push(row('Enviado → entrega prevista', dias(e, n)));
+  if (p && n) out.push(row('Pedido → entrega prevista (total)', dias(p, n)));
+  if (n) { const d = Math.round((n - hoy) / 864e5); out.push(row('Hasta la entrega prevista', d > 0 ? 'faltan ' + dias(hoy, n) : d === 0 ? 'es hoy' : 'retraso de ' + dias(n, hoy))); }
+  return out.length ? `<div style="margin-top:12px;padding:10px;border-radius:8px;background:rgba(255,255,255,.04);line-height:1.7">${out.join('')}</div>` : '';
+}
 function loteBox(n) {
   const m = adm.lotes[n] || {}, abierto = n === adm.lote;
   return `<div class="summary-card" style="margin:0 0 12px;padding:14px;font-size:13px">
     <div style="display:flex;justify-content:space-between"><b>Lote ${n}</b><span style="color:var(--muted)">${abierto ? 'Abierto' : 'Cerrado' + (m.cerrado ? ' el ' + esc(m.cerrado) : '')}</span></div>
     <label style="display:block;color:var(--muted);margin:10px 0 4px">Nº de seguimiento</label>
     <input class="text-input" id="trk${n}" style="padding:10px" value="${esc(m.tracking || '')}" placeholder="Sin número todavía">
+    <label style="display:block;color:var(--muted);margin:10px 0 4px">Fecha de envío del vendedor <span style="font-size:11px">(se rellena sola al guardar el seguimiento)</span></label>
+    <input class="text-input" id="env${n}" type="date" style="padding:10px" value="${esc(m.enviado || '')}">
     <label style="display:block;color:var(--muted);margin:10px 0 4px">Fecha prevista de entrega</label>
     <input class="text-input" id="ent${n}" type="date" style="padding:10px" value="${esc(m.entrega || '')}">
-    <button class="btn-next" style="width:100%;margin-top:10px;padding:10px;font-size:12px" onclick="saveLoteInfo(${n},this)">Guardar seguimiento y entrega</button>
+    ${abierto ? '' : `<label style="display:block;color:var(--muted);margin:10px 0 4px">Fecha en que se hizo el pedido al vendedor (cierre del lote)</label>
+    <input class="text-input" id="ped${n}" type="date" style="padding:10px" value="${esc(esToIso(m.cerrado))}">`}
+    ${plazos(m)}
+    <button class="btn-next" style="width:100%;margin-top:10px;padding:10px;font-size:12px" onclick="saveLoteInfo(${n},this)">Guardar seguimiento y fechas</button>
   </div>`;
 }
 async function saveLoteInfo(n, btn) {
-  const tracking = document.getElementById('trk' + n).value, entrega = document.getElementById('ent' + n).value;
+  const val = id => { const el = document.getElementById(id + n); return el ? el.value : ''; };
   btn.disabled = true; const old = btn.textContent; btn.textContent = 'Guardando...';
   try {
-    const d = await api({ action: 'setLoteInfo', password: adminPass, lote: n, tracking, entrega });
+    const d = await api({ action: 'setLoteInfo', password: adminPass, lote: n, tracking: val('trk'), entrega: val('ent'), enviado: val('env'), pedido: val('ped') });
     if (!d.ok) throw new Error(d.error);
     adm.lotes = d.lotes; btn.textContent = '✓ Guardado';
-    setTimeout(() => { btn.disabled = false; btn.textContent = old; }, 1200);
+    setTimeout(() => { if (document.getElementById('adminLotes').style.display === 'block') renderLotes(); else renderOrders(); }, 600);
   } catch (e) { alert('Error: ' + e.message); btn.disabled = false; btn.textContent = old; }
 }
 function loteMonth(n) {
@@ -1231,35 +1251,46 @@ async function setPagado(row, pagado) {
 const EDIT_FIELDS = [['equipo', 'Equipo'], ['equipacion', 'Equipación'], ['temporada', 'Temporada'], ['producto', 'Producto', 'select'],
   ['talla', 'Talla'], ['cantidad', 'Cantidad', 'number'], ['nombre', 'Nombre en la camiseta'], ['numero', 'Número'], ['parches', 'Parches'],
   ['cliente', 'Cliente'], ['telefono', 'Teléfono'], ['total', 'Total (€)', 'number'], ['coste', 'Coste (€)', 'number']];
+let edStd = 0;
 function openEdit(row) {
   const o = adm.orders.find(x => x.row === row); if (!o) return;
+  edStd = o.manual && o.estandar ? o.estandar : o.total;
   const names = SHIRTS.map(s => s.name); if (o.producto && !names.includes(o.producto)) names.unshift(o.producto);
   const chk = k => { const e = EXTRAS.find(x => x.id === k); if (!e) return '';
     return `<label style="display:block;font-size:12px;margin-top:6px"><input type="checkbox" id="cb_${k}" ${String(o.extras || '').includes(e.label) ? 'checked' : ''} onchange="toggleCobro('${k}')"> Cobrar ${esc(e.label)} (+${fmt(e.price)})</label>`; };
   const field = ([k, label, type]) => `<label style="display:block;color:var(--muted);font-size:12px;margin:10px 0 4px">${label}</label>` +
     (type === 'select'
       ? `<select class="text-input" id="ed_${k}" style="padding:10px">${names.map(n => `<option ${n === o[k] ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>`
-      : `<input class="text-input" id="ed_${k}" style="padding:10px" ${type === 'number' ? 'type="number" step="0.01" min="0"' : ''} value="${esc(o[k] == null ? '' : o[k])}">`) + chk(k);
+      : `<input class="text-input" id="ed_${k}" style="padding:10px" ${type === 'number' ? 'type="number" step="0.01" min="0"' : ''} ${k === 'total' && !o.manual ? 'readonly' : ''} value="${esc(o[k] == null ? '' : o[k])}">`) + chk(k) +
+    (k === 'total' ? `<label style="display:block;font-size:12px;margin-top:6px"><input type="checkbox" id="cb_manual" ${o.manual ? 'checked' : ''} onchange="toggleManual()"> Precio de venta personalizado (solo este cliente)</label>` : '');
   document.getElementById('editBox').innerHTML = `<h2>EDITAR PEDIDO</h2>
-    <p class="hint" style="margin:0 0 4px">Cambia lo que esté mal. Al marcar «Cobrar…» el total sube o baja solo con el precio del extra; el resto de cambios (producto, talla, cantidad) no recalculan el precio, ajústalo tú si hace falta. No se vuelve a enviar nada a Telegram.</p>
+    <p class="hint" style="margin:0 0 4px">Cambia lo que esté mal. El total está bloqueado para no tocarlo sin querer: si quieres cobrarle a este cliente otro precio, marca «Precio de venta personalizado». Las casillas «Cobrar…» suben o bajan el total solas (si no hay precio personalizado). Producto, talla y cantidad no recalculan el precio. No se vuelve a enviar nada a Telegram.</p>
     ${EDIT_FIELDS.map(field).join('')}
     <div class="nav" style="margin-top:16px"><button class="btn-back" onclick="closeEdit()">Cancelar</button><button class="btn-next" id="editSave" onclick="saveEdit(${row})">Guardar cambios</button></div>`;
+  if (!o.manual) document.getElementById('ed_total').style.opacity = '.6';
   document.getElementById('editModal').classList.add('show');
 }
 function toggleCobro(k) {
-  const e = EXTRAS.find(x => x.id === k), t = document.getElementById('ed_total');
-  t.value = Math.max(0, Math.round((Number(t.value || 0) + (document.getElementById('cb_' + k).checked ? 1 : -1) * e.price) * 100) / 100);
+  const e = EXTRAS.find(x => x.id === k), t = document.getElementById('ed_total'), delta = (document.getElementById('cb_' + k).checked ? 1 : -1) * e.price;
+  edStd = Math.max(0, Math.round((edStd + delta) * 100) / 100);
+  if (!document.getElementById('cb_manual').checked) t.value = edStd;   // con precio personalizado, el total no se toca
+}
+function toggleManual() {
+  const on = document.getElementById('cb_manual').checked, t = document.getElementById('ed_total');
+  t.readOnly = !on; t.style.opacity = on ? '1' : '.6';
+  if (on) t.focus(); else t.value = edStd;
 }
 function closeEdit() { document.getElementById('editModal').classList.remove('show'); }
 async function saveEdit(row) {
   const f = {}; EDIT_FIELDS.forEach(([k]) => f[k] = document.getElementById('ed_' + k).value);
   f.extras = EXTRAS.filter(e => document.getElementById('cb_' + e.id) && document.getElementById('cb_' + e.id).checked)
     .map(e => e.label + (f[e.id] ? ' (' + f[e.id] + ')' : '')).join(', ') || 'Ninguno';
+  const man = document.getElementById('cb_manual').checked; f.manual = man ? 'Sí' : ''; f.estandar = man ? edStd : '';
   const btn = document.getElementById('editSave'); btn.disabled = true; btn.textContent = 'Guardando...';
   try {
     const d = await api({ action: 'editOrder', password: adminPass, row, f });
     if (!d.ok) throw new Error(d.error);
-    Object.assign(adm.orders.find(o => o.row === row), f, { cantidad: Math.min(99, Math.max(1, parseInt(f.cantidad) || 1)), total: Number(String(f.total).replace(',', '.')), coste: Number(String(f.coste).replace(',', '.')) });
+    Object.assign(adm.orders.find(o => o.row === row), f, { manual: !!f.manual, estandar: f.estandar === '' ? null : Number(f.estandar), cantidad: Math.min(99, Math.max(1, parseInt(f.cantidad) || 1)), total: Number(String(f.total).replace(',', '.')), coste: Number(String(f.coste).replace(',', '.')) });
     closeEdit(); renderOrders();
   } catch (e) { alert('Error: ' + e.message); btn.disabled = false; btn.textContent = 'Guardar cambios'; }
 }
