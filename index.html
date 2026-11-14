@@ -1104,7 +1104,10 @@ function orderCard(o) {
       <select style="padding:4px 6px;font-size:12px" onchange="moveLote(${o.row},this.value)">${Array.from({length: adm.lote}, (_, i) => i + 1).map(n => `<option value="${n}" ${n === o.lote ? 'selected' : ''}>${n}${n === adm.lote ? ' (abierto)' : ''}</option>`).join('')}</select></div>
     <div>${esc(o.equipo)} — ${esc(o.equipacion)} (${esc(o.temporada)})</div>
     <div>${esc(o.producto)} · ${esc(o.talla)} × ${o.cantidad}</div>
-    ${o.extras && o.extras !== 'Ninguno' ? `<div>${esc(o.extras)}</div>` : ''}
+    <div style="margin-top:6px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.04);line-height:1.6">
+      ${[['Nombre', o.nombre, 'sin nombre'], ['Número', o.numero, 'sin número'], ['Parches', o.parches, 'sin parche']].map(([l, v, vacio]) => `<div><span style="color:var(--muted)">${l}:</span> ${v ? esc(v) : '<span style="color:var(--muted)">(' + vacio + ')</span>'}</div>`).join('')}
+      <div><span style="color:var(--muted)">Extras cobrados:</span> ${o.extras && o.extras !== 'Ninguno' ? esc(o.extras) : '<span style="color:var(--muted)">(ninguno)</span>'}</div>
+    </div>
     <button class="${o.pagado ? 'btn-next' : 'btn-back'}" style="width:100%;margin-top:10px;padding:9px;font-size:12px" onclick="setPagado(${o.row},${!o.pagado})">${o.pagado ? '✓ Pagado (pulsa para desmarcar)' : '💶 Sin pagar · marcar como pagado'}</button>
     <button class="btn-back" style="width:100%;margin-top:8px;padding:9px;font-size:12px" onclick="openEdit(${o.row})">✏️ Editar pedido</button>
     <div style="display:flex;gap:8px;margin-top:8px">
@@ -1226,23 +1229,31 @@ async function setPagado(row, pagado) {
 }
 const EDIT_FIELDS = [['equipo', 'Equipo'], ['equipacion', 'Equipación'], ['temporada', 'Temporada'], ['producto', 'Producto', 'select'],
   ['talla', 'Talla'], ['cantidad', 'Cantidad', 'number'], ['nombre', 'Nombre en la camiseta'], ['numero', 'Número'], ['parches', 'Parches'],
-  ['extras', 'Extras (resumen)'], ['cliente', 'Cliente'], ['telefono', 'Teléfono'], ['total', 'Total (€)', 'number'], ['coste', 'Coste (€)', 'number']];
+  ['cliente', 'Cliente'], ['telefono', 'Teléfono'], ['total', 'Total (€)', 'number'], ['coste', 'Coste (€)', 'number']];
 function openEdit(row) {
   const o = adm.orders.find(x => x.row === row); if (!o) return;
   const names = SHIRTS.map(s => s.name); if (o.producto && !names.includes(o.producto)) names.unshift(o.producto);
+  const chk = k => { const e = EXTRAS.find(x => x.id === k); if (!e) return '';
+    return `<label style="display:block;font-size:12px;margin-top:6px"><input type="checkbox" id="cb_${k}" ${String(o.extras || '').includes(e.label) ? 'checked' : ''} onchange="toggleCobro('${k}')"> Cobrar ${esc(e.label)} (+${fmt(e.price)})</label>`; };
   const field = ([k, label, type]) => `<label style="display:block;color:var(--muted);font-size:12px;margin:10px 0 4px">${label}</label>` +
     (type === 'select'
       ? `<select class="text-input" id="ed_${k}" style="padding:10px">${names.map(n => `<option ${n === o[k] ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>`
-      : `<input class="text-input" id="ed_${k}" style="padding:10px" ${type === 'number' ? 'type="number" step="0.01" min="0"' : ''} value="${esc(o[k] == null ? '' : o[k])}">`);
+      : `<input class="text-input" id="ed_${k}" style="padding:10px" ${type === 'number' ? 'type="number" step="0.01" min="0"' : ''} value="${esc(o[k] == null ? '' : o[k])}">`) + chk(k);
   document.getElementById('editBox').innerHTML = `<h2>EDITAR PEDIDO</h2>
-    <p class="hint" style="margin:0 0 4px">Cambia lo que esté mal. El precio y el coste no se recalculan solos: ajústalos tú si hace falta. No se vuelve a enviar nada a Telegram.</p>
+    <p class="hint" style="margin:0 0 4px">Cambia lo que esté mal. Al marcar «Cobrar…» el total sube o baja solo con el precio del extra; el resto de cambios (producto, talla, cantidad) no recalculan el precio, ajústalo tú si hace falta. No se vuelve a enviar nada a Telegram.</p>
     ${EDIT_FIELDS.map(field).join('')}
     <div class="nav" style="margin-top:16px"><button class="btn-back" onclick="closeEdit()">Cancelar</button><button class="btn-next" id="editSave" onclick="saveEdit(${row})">Guardar cambios</button></div>`;
   document.getElementById('editModal').classList.add('show');
 }
+function toggleCobro(k) {
+  const e = EXTRAS.find(x => x.id === k), t = document.getElementById('ed_total');
+  t.value = Math.max(0, Math.round((Number(t.value || 0) + (document.getElementById('cb_' + k).checked ? 1 : -1) * e.price) * 100) / 100);
+}
 function closeEdit() { document.getElementById('editModal').classList.remove('show'); }
 async function saveEdit(row) {
   const f = {}; EDIT_FIELDS.forEach(([k]) => f[k] = document.getElementById('ed_' + k).value);
+  f.extras = EXTRAS.filter(e => document.getElementById('cb_' + e.id) && document.getElementById('cb_' + e.id).checked)
+    .map(e => e.label + (f[e.id] ? ' (' + f[e.id] + ')' : '')).join(', ') || 'Ninguno';
   const btn = document.getElementById('editSave'); btn.disabled = true; btn.textContent = 'Guardando...';
   try {
     const d = await api({ action: 'editOrder', password: adminPass, row, f });
