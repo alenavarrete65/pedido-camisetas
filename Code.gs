@@ -25,11 +25,16 @@ function getPrices_() {
   return {
     products: Object.assign({}, DEFAULTS.products, s.products),
     extras: Object.assign({}, DEFAULTS.extras, s.extras),
-    bigSize: s.bigSize != null ? s.bigSize : DEFAULTS.bigSize
+    bigSize: s.bigSize != null ? s.bigSize : DEFAULTS.bigSize,
+    costs: s.costs || {}
   };
 }
 
-function doGet() { return json_({ ok: true, prices: getPrices_() }); }
+function doGet() {
+  const p = getPrices_();
+  delete p.costs; // los costes nunca se publican
+  return json_({ ok: true, prices: p });
+}
 
 function checkAdmin_(pw) {
   const cache = CacheService.getScriptCache();
@@ -49,6 +54,9 @@ function doPost(e) {
     const d = JSON.parse(e.postData.contents);
     if (d.action === 'login') { checkAdmin_(d.password); return json_({ ok: true }); }
     if (d.action === 'setPrices') { checkAdmin_(d.password); return setPrices_(d.prices); }
+    if (d.action === 'listOrders') { checkAdmin_(d.password); return listOrders_(); }
+    if (d.action === 'setStatus') { checkAdmin_(d.password); return setStatus_(d.row, d.estado); }
+    if (d.action === 'closeLote') { checkAdmin_(d.password); return closeLote_(); }
     return saveOrder_(d);
   } catch (err) {
     return json_({ ok: false, error: String(err.message || err) });
@@ -56,7 +64,7 @@ function doPost(e) {
 }
 
 function setPrices_(p) {
-  const clean = { products: {}, extras: {}, bigSize: 0 };
+  const clean = { products: {}, extras: {}, costs: {}, bigSize: 0 };
   const val = (v, name) => {
     v = Number(v);
     if (!(v >= 0 && v <= 1000)) throw new Error('Precio no válido: ' + name);
@@ -64,6 +72,7 @@ function setPrices_(p) {
   };
   Object.keys(DEFAULTS.products).forEach(k => clean.products[k] = val(p.products[k], k));
   Object.keys(DEFAULTS.extras).forEach(k => clean.extras[k] = val(p.extras[k], k));
+  Object.keys(DEFAULTS.products).forEach(k => clean.costs[k] = val(p.costs && p.costs[k] != null ? p.costs[k] : 0, 'coste ' + k));
   clean.bigSize = val(p.bigSize, 'suplemento talla');
   PropertiesService.getScriptProperties().setProperty('PRICES', JSON.stringify(clean));
   return json_({ ok: true });
@@ -82,13 +91,14 @@ function saveOrder_(d) {
   const unit = base + (['3XL', '4XL'].indexOf(d.size_raw) >= 0 ? P.bigSize : 0) +
     ids.reduce((a, id) => a + P.extras[id], 0);
   const totalNum = Math.round(unit * qty * 100) / 100;           // número real, para poder sumar en la hoja
+  const costNum = Math.round((P.costs[d.producto] || 0) * qty * 100) / 100; // coste de este pedido (se guarda fijo)
   const totalTxt = String(totalNum).replace('.', ',') + '€';     // texto, solo para Telegram
 
   // Evita fórmulas maliciosas en la hoja (=, +, -, @) y textos enormes
   const t = v => { v = String(v == null ? '' : v).slice(0, 200); return /^[=+\-@]/.test(v) ? "'" + v : v; };
   const row = [t(d.fecha), t(d.equipo), t(d.equipacion), t(d.temporada), t(d.camiseta), t(d.talla), qty,
     t(d.nombre_camiseta), t(d.numero_camiseta), t(d.parches), t(d.contacto_nombre), t(d.contacto_telefono),
-    t(d.extras_resumen), totalNum, t(d.id)];
+    t(d.extras_resumen), totalNum, t(d.id), '', 'Pendiente', currentLote_(), costNum];
 
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
@@ -97,11 +107,13 @@ function saveOrder_(d) {
     const sh = ss.getSheetByName('Pedidos') || ss.insertSheet('Pedidos');
     if (sh.getLastRow() === 0) {
       sh.appendRow(['Fecha', 'Equipo', 'Equipación', 'Temporada', 'Producto', 'Talla', 'Cantidad', 'Nombre',
-        'Número', 'Parches', 'Cliente', 'Teléfono', 'Extras', 'Total', 'ID', 'Telegram']);
+        'Número', 'Parches', 'Cliente', 'Teléfono', 'Extras', 'Total', 'ID', 'Telegram', 'Estado', 'Lote', 'Coste']);
     }
+    if (sh.getRange(1, 17).getValue() === '') sh.getRange(1, 17, 1, 3).setValues([['Estado', 'Lote', 'Coste']]);
     sh.appendRow(row);
     const r = sh.getLastRow();
     sh.getRange(r, 14).setNumberFormat('#,##0.00 "€"'); // formato dinero
+    sh.getRange(r, 19).setNumberFormat('#,##0.00 "€"');
 
     const msg = '🛒 NUEVO PEDIDO\n' +
       '👤 ' + row[10] + ' · ' + row[11] + '\n' +
@@ -149,4 +161,37 @@ function arreglarTotales() {
   });
   rng.setValues(vals);
   rng.setNumberFormat('#,##0.00 "€"');
+}
+
+// ═══ Pedidos, estados y lotes ═══
+function currentLote_() { return Number(PropertiesService.getScriptProperties().getProperty('LOTE') || 1); }
+
+function listOrders_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Pedidos');
+  const base = { ok: true, lote: currentLote_(), costs: getPrices_().costs, orders: [] };
+  if (!sh || sh.getLastRow() < 2) return json_(base);
+  const tz = Session.getScriptTimeZone();
+  base.orders = sh.getRange(2, 1, sh.getLastRow() - 1, 19).getValues().map((r, i) => ({
+    row: i + 2,
+    fecha: r[0] instanceof Date ? Utilities.formatDate(r[0], tz, 'dd/MM/yyyy HH:mm') : String(r[0]),
+    equipo: r[1], equipacion: r[2], temporada: r[3], producto: r[4], talla: r[5], cantidad: r[6],
+    extras: r[12], cliente: r[10], telefono: r[11],
+    total: Number(r[13]) || 0, estado: r[16] || 'Pendiente', lote: Number(r[17]) || 1, coste: Number(r[18]) || 0
+  }));
+  return json_(base);
+}
+
+function setStatus_(row, estado) {
+  if (['Pendiente', 'Pedido', 'Anulado'].indexOf(estado) < 0) throw new Error('Estado no válido');
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Pedidos');
+  row = parseInt(row);
+  if (!(row >= 2 && row <= sh.getLastRow())) throw new Error('Fila no válida');
+  sh.getRange(row, 17).setValue(estado);
+  return json_({ ok: true });
+}
+
+function closeLote_() {
+  const n = currentLote_() + 1;
+  PropertiesService.getScriptProperties().setProperty('LOTE', String(n));
+  return json_({ ok: true, lote: n });
 }
