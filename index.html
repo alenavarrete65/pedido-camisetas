@@ -644,7 +644,7 @@
   </div>
   <div id="adminEditor" style="display:none">
     <div class="nav" style="margin:0 0 14px;flex-wrap:wrap"><button class="btn-next" onclick="adminTab('orders')">Pedidos</button><button class="btn-next" onclick="adminTab('lotes')">Lotes</button><button class="btn-next" onclick="adminTab('resumen')">Resumen</button><button class="btn-next" onclick="adminTab('prices')">Precios</button><button class="btn-back" onclick="closeAdmin()">Cerrar</button></div>
-    <div style="color:var(--muted);font-size:10px;text-align:right;margin:-8px 0 10px">versión 14-nov-H</div>
+    <div style="color:var(--muted);font-size:10px;text-align:right;margin:-8px 0 10px">versión 14-nov-J</div>
     <div id="adminOrders"></div>
     <div id="adminLotes" style="display:none"></div>
     <div id="adminResumen" style="display:none"></div>
@@ -1078,7 +1078,7 @@ async function adminLogin() {
     document.getElementById('adminEditor').style.display = 'block';
   } catch (e) { err.textContent = e.message === 'Failed to fetch' ? 'Sin conexión con el servidor' : e.message; }
 }
-let adm = { orders: [], lotes: {}, unpaid: false, q: '', ml: 'all', lote: 1, costs: {}, view: 0, mode: 'lote', month: '', pend: false, loaded: false };
+let adm = { open: {}, orders: [], lotes: {}, unpaid: false, q: '', ml: 'all', lote: 1, costs: {}, view: 0, mode: 'lote', month: '', pend: false, loaded: false };
 async function adminTab(t) {
   document.getElementById('adminOrders').style.display = t === 'orders' ? 'block' : 'none';
   document.getElementById('adminPrices').style.display = t === 'prices' ? 'block' : 'none';
@@ -1229,23 +1229,26 @@ function statsHtml(st) {
 function renderResumen() {
   const todos = Array.from({ length: adm.lote }, (_, i) => i + 1).reverse(), groups = {};
   todos.forEach(n => (groups[loteMonth(n)] = groups[loteMonth(n)] || []).push(n));
-  const card = (extra, inner) => `<div class="summary-card" style="margin:0 0 10px;padding:14px;font-size:13px;${extra}">${inner}</div>`;
-  const html = card('border-color:var(--accent)', `<b>TOTAL GENERAL</b>${statsHtml(loteStats(todos))}`) +
-    Object.keys(groups).sort().reverse().map(k => {
-      const ns = groups[k];
-      return `<h3 style="margin:18px 0 8px;text-transform:capitalize">${mesLabel(k)}</h3>` +
-        (ns.length > 1 ? card('', `<b>Total del mes</b> <span style="color:var(--muted)">(${ns.length} lotes)</span>${statsHtml(loteStats(ns))}`) : '') +
+  const isOpen = (k, d) => adm.open[k] === undefined ? d : adm.open[k];
+  const det = (key, d, style, head, body) => `<details ${isOpen(key, d) ? 'open' : ''} ontoggle="adm.open['${key}']=this.open" class="summary-card" style="margin:0 0 10px;padding:12px 14px;font-size:13px;${style}"><summary style="cursor:pointer;list-style-position:inside">${head}</summary>${body}</details>`;
+  const mini = st => `<span style="color:var(--muted)">${st.pedidos} ped. · ${st.camisetas} cam. · </span><b style="color:var(--accent)">${fmt(st.beneficio)}</b>`;
+  const row = (l, v) => `<div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--muted)">${l}</span><b>${v}</b></div>`;
+  const keys = Object.keys(groups).sort().reverse();
+  const html = keys.map((k, mi) => {
+      const ns = groups[k], ms = loteStats(ns);
+      return det('m' + k, mi === 0, '', `<b style="text-transform:capitalize">${mesLabel(k)}</b> <span style="color:var(--muted)">· ${ns.length} ${ns.length === 1 ? 'lote' : 'lotes'} ·</span> ${mini(ms)}`,
+        `<div style="margin-top:6px"><b style="font-size:12px;color:var(--muted)">TOTAL DEL MES</b>${statsHtml(ms)}</div><div style="margin-top:12px">` +
         ns.map(n => {
-          const m = adm.lotes[n] || {}, abierto = n === adm.lote;
-          return card('', `<div style="display:flex;justify-content:space-between"><b>Lote ${n}</b><span style="color:var(--muted)">${abierto ? 'Abierto' : 'Cerrado'}</span></div>
-            <div style="line-height:1.7;margin-top:8px">
-              <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--muted)">Nº de seguimiento</span><b>${m.tracking ? esc(m.tracking) : '—'}</b></div>
-              <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--muted)">Pedido al vendedor</span><b>${abierto ? 'sin cerrar' : (esc(m.cerrado) || '—')}</b></div>
-              <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--muted)">Enviado por el vendedor</span><b>${fdate(m.enviado) || '—'}</b></div>
-              <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--muted)">Entrega prevista</span><b>${fdate(m.entrega) || '—'}</b></div>
-            </div>${plazos(m)}${statsHtml(loteStats([n]))}
+          const m = adm.lotes[n] || {}, abierto = n === adm.lote, st = loteStats([n]);
+          return det('l' + n, false, 'background:rgba(255,255,255,.03)', `<b>Lote ${n}</b> <span style="color:var(--muted)">· ${abierto ? 'abierto' : 'cerrado'} ·</span> ${mini(st)}`,
+            `<div style="line-height:1.7;margin-top:8px">
+              ${row('Nº de seguimiento', m.tracking ? esc(m.tracking) : '—')}
+              ${row('Pedido al vendedor', abierto ? 'sin cerrar' : (esc(m.cerrado) || '—'))}
+              ${row('Enviado por el vendedor', fdate(m.enviado) || '—')}
+              ${row('Entrega prevista', fdate(m.entrega) || '—')}
+            </div>${plazos(m)}${statsHtml(st)}
             <button class="btn-back" style="width:100%;margin-top:10px;padding:9px;font-size:12px" onclick="verLote(${n})">Ver pedidos de este lote</button>`);
-        }).join('');
+        }).join('') + '</div>');
     }).join('');
   document.getElementById('adminResumen').innerHTML = html;
 }
