@@ -643,8 +643,9 @@
     <div class="nav"><button class="btn-back" onclick="closeAdmin()">Cancelar</button><button class="btn-next" onclick="adminLogin()">Entrar</button></div>
   </div>
   <div id="adminEditor" style="display:none">
-    <div class="nav" style="margin:0 0 14px"><button class="btn-next" onclick="adminTab('orders')">Pedidos</button><button class="btn-next" onclick="adminTab('prices')">Precios</button><button class="btn-back" onclick="closeAdmin()">Cerrar</button></div>
+    <div class="nav" style="margin:0 0 14px"><button class="btn-next" onclick="adminTab('orders')">Pedidos</button><button class="btn-next" onclick="adminTab('lotes')">Lotes</button><button class="btn-next" onclick="adminTab('prices')">Precios</button><button class="btn-back" onclick="closeAdmin()">Cerrar</button></div>
     <div id="adminOrders"></div>
+    <div id="adminLotes" style="display:none"></div>
     <div id="adminPrices" style="display:none">
       <div id="adminFields"></div>
       <div class="nav"><button class="btn-next" id="adminSave" onclick="adminSave()">Guardar precios</button></div>
@@ -693,7 +694,7 @@ const EXTRAS = [
 ];
 
 const TOTAL_STEPS = 7;
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwLS8-SNnPW_XPubW6bGWzRhni_Dg6ahorW7bXdHohqcLyOis0ihG1yFcoOrwYnwRVg/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEp9_gI-Iz2fO3GiGpzrZEXd7VPOFnvzMooTPF9ITMclVKBtTJgk0hMUDyC4NcmN4AFw/exec';
 let BIG_EXTRA = 1;
 
 // ── STATE ────────────────────────────────────────────────
@@ -1074,11 +1075,13 @@ async function adminLogin() {
     document.getElementById('adminEditor').style.display = 'block';
   } catch (e) { err.textContent = e.message === 'Failed to fetch' ? 'Sin conexión con el servidor' : e.message; }
 }
-let adm = { orders: [], lote: 1, costs: {}, view: 0, mode: 'lote', month: '', pend: false, loaded: false };
+let adm = { orders: [], lotes: {}, q: '', lote: 1, costs: {}, view: 0, mode: 'lote', month: '', pend: false, loaded: false };
 async function adminTab(t) {
   document.getElementById('adminOrders').style.display = t === 'orders' ? 'block' : 'none';
   document.getElementById('adminPrices').style.display = t === 'prices' ? 'block' : 'none';
+  document.getElementById('adminLotes').style.display = t === 'lotes' ? 'block' : 'none';
   if (t === 'orders') loadOrders();
+  else if (t === 'lotes') { await loadOrders(); renderLotes(); }
   else { if (!adm.loaded) await loadOrders(); renderAdmin(); }
 }
 async function loadOrders() {
@@ -1087,7 +1090,7 @@ async function loadOrders() {
   try {
     const d = await api({ action: 'listOrders', password: adminPass });
     if (!d.ok) throw new Error(d.error);
-    adm.orders = d.orders; adm.lote = d.lote; adm.costs = d.costs || {}; adm.loaded = true;
+    adm.orders = d.orders; adm.lote = d.lote; adm.lotes = d.lotes || {}; adm.costs = d.costs || {}; adm.loaded = true;
     if (!adm.view || adm.view > adm.lote) adm.view = adm.lote;
     renderOrders();
   } catch (e) { box.innerHTML = '<p class="error-msg show">' + esc(e.message) + '</p>'; }
@@ -1131,8 +1134,63 @@ function renderOrders() {
     <div class="total-box" style="margin:0 0 12px;flex-direction:column;align-items:stretch;gap:4px;font-size:13px">
       ${line('Pedidos', list.length)}${line('Ventas', fmt(ventas))}${line('Coste', fmt(coste))}${line('Beneficio', fmt(ventas - coste))}
     </div>
+    ${!byMes ? loteBox(adm.view) : ''}
     ${shown.map(orderCard).join('') || '<p class="hint">No hay pedidos.</p>'}
     ${!byMes && adm.view === adm.lote ? '<button class="btn-reset" style="width:100%;margin-top:14px" onclick="closeLote()">Cerrar lote y empezar otro</button>' : ''}`;
+}
+function fdate(iso) { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? m[3] + '/' + m[2] + '/' + m[1] : ''; }
+function loteBox(n) {
+  const m = adm.lotes[n] || {}, abierto = n === adm.lote;
+  return `<div class="summary-card" style="margin:0 0 12px;padding:14px;font-size:13px">
+    <div style="display:flex;justify-content:space-between"><b>Lote ${n}</b><span style="color:var(--muted)">${abierto ? 'Abierto' : 'Cerrado' + (m.cerrado ? ' el ' + esc(m.cerrado) : '')}</span></div>
+    <label style="display:block;color:var(--muted);margin:10px 0 4px">Nº de seguimiento</label>
+    <input class="text-input" id="trk${n}" style="padding:10px" value="${esc(m.tracking || '')}" placeholder="Sin número todavía">
+    <label style="display:block;color:var(--muted);margin:10px 0 4px">Fecha prevista de entrega</label>
+    <input class="text-input" id="ent${n}" type="date" style="padding:10px" value="${esc(m.entrega || '')}">
+    <button class="btn-next" style="width:100%;margin-top:10px;padding:10px;font-size:12px" onclick="saveLoteInfo(${n},this)">Guardar seguimiento y entrega</button>
+  </div>`;
+}
+async function saveLoteInfo(n, btn) {
+  const tracking = document.getElementById('trk' + n).value, entrega = document.getElementById('ent' + n).value;
+  btn.disabled = true; const old = btn.textContent; btn.textContent = 'Guardando...';
+  try {
+    const d = await api({ action: 'setLoteInfo', password: adminPass, lote: n, tracking, entrega });
+    if (!d.ok) throw new Error(d.error);
+    adm.lotes = d.lotes; btn.textContent = '✓ Guardado';
+    setTimeout(() => { btn.disabled = false; btn.textContent = old; }, 1200);
+  } catch (e) { alert('Error: ' + e.message); btn.disabled = false; btn.textContent = old; }
+}
+function loteMonth(n) {
+  const m = adm.lotes[n] || {};
+  if (m.cerrado) return mesKey(m.cerrado);
+  const os = adm.orders.filter(o => o.lote === n);
+  if (os.length) return mesKey(os[os.length - 1].fecha);
+  const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+function verLote(n) { adm.mode = 'lote'; adm.view = n; adm.pend = false; document.getElementById('adminLotes').style.display = 'none'; document.getElementById('adminOrders').style.display = 'block'; renderOrders(); }
+function renderLotes() {
+  document.getElementById('adminLotes').innerHTML = `
+    <input class="text-input" style="padding:10px;margin-bottom:12px" placeholder="Buscar por nº de seguimiento o nº de lote" value="${esc(adm.q)}" oninput="adm.q=this.value;renderLoteList()">
+    <div id="loteList"></div>`;
+  renderLoteList();
+}
+function renderLoteList() {
+  const q = adm.q.trim().toLowerCase(), groups = {};
+  for (let n = adm.lote; n >= 1; n--) {
+    const m = adm.lotes[n] || {};
+    if (q && !String(m.tracking || '').toLowerCase().includes(q) && String(n) !== q && ('lote ' + n) !== q) continue;
+    (groups[loteMonth(n)] = groups[loteMonth(n)] || []).push(n);
+  }
+  const html = Object.keys(groups).sort().reverse().map(k => `
+    <h3 style="margin:16px 0 8px;text-transform:capitalize">${mesLabel(k)}</h3>
+    ${groups[k].map(n => {
+      const os = adm.orders.filter(o => o.lote === n && o.estado !== 'Anulado');
+      const ventas = os.reduce((a, o) => a + o.total, 0), m = adm.lotes[n] || {};
+      return loteBox(n).replace('</div>\n    <label', `</div>
+    <div style="color:var(--muted);margin-top:4px">${os.length} pedidos · ${fmt(ventas)}${m.entrega ? ' · Entrega ' + fdate(m.entrega) : ''}</div>
+    <label`).replace(/<\/div>$/, `<button class="btn-back" style="width:100%;margin-top:8px;padding:10px;font-size:12px" onclick="verLote(${n})">Ver pedidos de este lote</button></div>`);
+    }).join('')}`).join('');
+  document.getElementById('loteList').innerHTML = html || '<p class="hint">No hay lotes que coincidan.</p>';
 }
 async function setEstado(row, estado) {
   if (estado === 'Anulado' && !confirm('¿Anular este pedido? Dejará de contar en los totales.')) return;
@@ -1147,7 +1205,7 @@ async function closeLote() {
   try {
     const d = await api({ action: 'closeLote', password: adminPass });
     if (!d.ok) throw new Error(d.error);
-    adm.view = d.lote; loadOrders();
+    adm.view = d.lote; adm.lotes = d.lotes || adm.lotes; adminTab('lotes');
   } catch (e) { alert('Error: ' + e.message); }
 }
 function adminCalc(i, from) {

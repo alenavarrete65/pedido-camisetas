@@ -56,6 +56,7 @@ function doPost(e) {
     if (d.action === 'setPrices') { checkAdmin_(d.password); return setPrices_(d.prices); }
     if (d.action === 'listOrders') { checkAdmin_(d.password); return listOrders_(); }
     if (d.action === 'setStatus') { checkAdmin_(d.password); return setStatus_(d.row, d.estado); }
+    if (d.action === 'setLoteInfo') { checkAdmin_(d.password); return setLoteInfo_(d.lote, d.tracking, d.entrega); }
     if (d.action === 'closeLote') { checkAdmin_(d.password); return closeLote_(); }
     return saveOrder_(d);
   } catch (err) {
@@ -193,7 +194,7 @@ function num_(v) {
 function listOrders_() {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Pedidos');
   const costs = getPrices_().costs;
-  const base = { ok: true, lote: currentLote_(), costs: costs, orders: [] };
+  const base = { ok: true, lote: currentLote_(), lotes: lotesMeta_(), costs: costs, orders: [] };
   if (!sh || sh.getLastRow() < 2) return json_(base);
   const [cE, cL, cC] = metaCols_(sh);
   const tz = Session.getScriptTimeZone();
@@ -225,8 +226,58 @@ function setStatus_(row, estado) {
   return json_({ ok: true });
 }
 
+// Datos de cada lote: { "1": { cerrado:'dd/MM/yyyy', tracking:'...', entrega:'yyyy-MM-dd' } }
+function lotesMeta_() {
+  const raw = PropertiesService.getScriptProperties().getProperty('LOTES');
+  return raw ? JSON.parse(raw) : {};
+}
+function saveLotesMeta_(m) { PropertiesService.getScriptProperties().setProperty('LOTES', JSON.stringify(m)); }
+
 function closeLote_() {
-  const n = currentLote_() + 1;
+  const old = currentLote_(), n = old + 1;
+  const m = lotesMeta_();
+  m[old] = Object.assign({}, m[old], { cerrado: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy') });
+  saveLotesMeta_(m);
   PropertiesService.getScriptProperties().setProperty('LOTE', String(n));
-  return json_({ ok: true, lote: n });
+  return json_({ ok: true, lote: n, lotes: m });
+}
+
+function setLoteInfo_(lote, tracking, entrega) {
+  lote = parseInt(lote);
+  if (!(lote >= 1 && lote <= currentLote_())) throw new Error('Lote no válido');
+  entrega = String(entrega || '');
+  if (entrega && !/^\d{4}-\d{2}-\d{2}$/.test(entrega)) throw new Error('Fecha no válida');
+  const m = lotesMeta_();
+  m[lote] = Object.assign({}, m[lote], { tracking: String(tracking || '').trim().slice(0, 100), entrega: entrega });
+  saveLotesMeta_(m);
+  return json_({ ok: true, lotes: m });
+}
+
+// ═══ Ejecútala UNA sola vez a mano desde el editor ═══
+// Cierra el lote actual con todo lo que ya está "Pedido" y deja lo "Pendiente"
+// en un lote nuevo abierto, para que lo cierres tú cuando quieras.
+function separarPedidosYa() {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('SEPARADO')) { Logger.log('Ya se ejecutó antes. No hago nada.'); return; }
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Pedidos');
+  if (!sh || sh.getLastRow() < 2) { Logger.log('No hay pedidos.'); return; }
+  const actual = currentLote_(), nuevo = actual + 1;
+  const [cE, cL] = metaCols_(sh);
+  const n = sh.getLastRow() - 1;
+  const rngE = sh.getRange(2, cE, n, 1), rngL = sh.getRange(2, cL, n, 1);
+  const est = rngE.getValues(), lot = rngL.getValues();
+  let cerrados = 0, pendientes = 0;
+  for (let i = 0; i < n; i++) {
+    if ((Number(lot[i][0]) || 1) !== actual) continue;           // solo toca el lote actual
+    const e = est[i][0] || 'Pendiente';
+    if (e === 'Pendiente') { lot[i][0] = nuevo; pendientes++; }   // pasa al lote nuevo (abierto)
+    else { lot[i][0] = actual; if (e === 'Pedido') cerrados++; }  // Pedido / Anulado se quedan en el lote cerrado
+  }
+  rngL.setValues(lot);
+  const m = lotesMeta_();
+  m[actual] = Object.assign({}, m[actual], { cerrado: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy') });
+  saveLotesMeta_(m);
+  props.setProperty('LOTE', String(nuevo));
+  props.setProperty('SEPARADO', '1');
+  Logger.log('Lote ' + actual + ' cerrado con ' + cerrados + ' pedidos. Lote ' + nuevo + ' abierto con ' + pendientes + ' pendientes.');
 }
