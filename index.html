@@ -693,7 +693,7 @@ const EXTRAS = [
 ];
 
 const TOTAL_STEPS = 7;
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw5AInh6Ji1ptSRodiOjxkDg7Wzsb_GZKT_L5OIdXMSGhjEpfFEI2O43Mu6dHkvcYnI2Q/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwLS8-SNnPW_XPubW6bGWzRhni_Dg6ahorW7bXdHohqcLyOis0ihG1yFcoOrwYnwRVg/exec';
 let BIG_EXTRA = 1;
 
 // ── STATE ────────────────────────────────────────────────
@@ -1074,7 +1074,7 @@ async function adminLogin() {
     document.getElementById('adminEditor').style.display = 'block';
   } catch (e) { err.textContent = e.message === 'Failed to fetch' ? 'Sin conexión con el servidor' : e.message; }
 }
-let adm = { orders: [], lote: 1, costs: {}, view: 0, pend: false, loaded: false };
+let adm = { orders: [], lote: 1, costs: {}, view: 0, mode: 'lote', month: '', pend: false, loaded: false };
 async function adminTab(t) {
   document.getElementById('adminOrders').style.display = t === 'orders' ? 'block' : 'none';
   document.getElementById('adminPrices').style.display = t === 'prices' ? 'block' : 'none';
@@ -1096,7 +1096,7 @@ function orderCard(o) {
   const done = o.estado === 'Pedido';
   return `<div class="summary-card" style="margin:0 0 10px;padding:14px;font-size:13px;${done ? 'opacity:.55' : ''}">
     <div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(o.cliente)} · ${esc(o.telefono)}</b><span style="color:var(--accent)">${fmt(o.total)}</span></div>
-    <div style="color:var(--muted);margin:4px 0">${esc(o.fecha)}</div>
+    <div style="color:var(--muted);margin:4px 0">${esc(o.fecha)} · Lote ${o.lote}</div>
     <div>${esc(o.equipo)} — ${esc(o.equipacion)} (${esc(o.temporada)})</div>
     <div>${esc(o.producto)} · ${esc(o.talla)} × ${o.cantidad}</div>
     ${o.extras && o.extras !== 'Ninguno' ? `<div>${esc(o.extras)}</div>` : ''}
@@ -1105,22 +1105,34 @@ function orderCard(o) {
       <button class="btn-back" style="padding:9px 12px;font-size:12px" onclick="setEstado(${o.row},'Anulado')">Anular</button>
     </div></div>`;
 }
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function mesKey(f) { const m = String(f).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? m[3] + '-' + m[2].padStart(2, '0') : 'sin-fecha'; }
+function mesLabel(k) { const [y, m] = k.split('-'); return MESES[+m - 1] ? MESES[+m - 1] + ' ' + y : 'Sin fecha'; }
+function setSel(v) { if (adm.mode === 'mes') adm.month = v; else adm.view = +v; renderOrders(); }
 function renderOrders() {
-  const lotes = [...new Set([...adm.orders.map(o => o.lote), adm.lote])].sort((a, b) => b - a);
-  const list = adm.orders.filter(o => o.lote === adm.view && o.estado !== 'Anulado');
+  const byMes = adm.mode === 'mes';
+  const keys = byMes
+    ? [...new Set(adm.orders.map(o => mesKey(o.fecha)))].sort().reverse()
+    : [...new Set([...adm.orders.map(o => o.lote), adm.lote])].sort((a, b) => b - a);
+  if (byMes && adm.month !== 'all' && !keys.includes(adm.month)) adm.month = keys[0] || 'all';
+  const sel = byMes ? adm.month : adm.view;
+  const list = adm.orders.filter(o => o.estado !== 'Anulado' && (byMes ? (sel === 'all' || mesKey(o.fecha) === sel) : o.lote === sel));
   const ventas = list.reduce((a, o) => a + o.total, 0), coste = list.reduce((a, o) => a + o.coste, 0);
   const shown = adm.pend ? list.filter(o => o.estado === 'Pendiente') : list;
   const line = (l, v) => `<div style="display:flex;justify-content:space-between"><span>${l}</span><b>${v}</b></div>`;
+  const opts = (byMes ? '<option value="all"' + (sel === 'all' ? ' selected' : '') + '>Todos los meses</option>' : '') +
+    keys.map(k => `<option value="${k}" ${String(k) === String(sel) ? 'selected' : ''}>${byMes ? mesLabel(k) : 'Lote ' + k + (k === adm.lote ? ' (actual)' : '')}</option>`).join('');
   document.getElementById('adminOrders').innerHTML = `
-    <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
-      <select class="text-input" style="padding:10px" onchange="adm.view=+this.value;renderOrders()">${lotes.map(l => `<option value="${l}" ${l === adm.view ? 'selected' : ''}>Lote ${l}${l === adm.lote ? ' (actual)' : ''}</option>`).join('')}</select>
-      <label style="font-size:12px;color:var(--muted);white-space:nowrap"><input type="checkbox" ${adm.pend ? 'checked' : ''} onchange="adm.pend=this.checked;renderOrders()"> Solo pendientes</label>
+    <div style="display:flex;gap:10px;margin-bottom:10px">
+      <select class="text-input" style="padding:10px" onchange="adm.mode=this.value;renderOrders()"><option value="lote" ${byMes ? '' : 'selected'}>Por lote</option><option value="mes" ${byMes ? 'selected' : ''}>Por mes</option></select>
+      <select class="text-input" style="padding:10px" onchange="setSel(this.value)">${opts}</select>
     </div>
+    <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:12px"><input type="checkbox" ${adm.pend ? 'checked' : ''} onchange="adm.pend=this.checked;renderOrders()"> Solo pendientes de pedir</label>
     <div class="total-box" style="margin:0 0 12px;flex-direction:column;align-items:stretch;gap:4px;font-size:13px">
       ${line('Pedidos', list.length)}${line('Ventas', fmt(ventas))}${line('Coste', fmt(coste))}${line('Beneficio', fmt(ventas - coste))}
     </div>
     ${shown.map(orderCard).join('') || '<p class="hint">No hay pedidos.</p>'}
-    ${adm.view === adm.lote ? '<button class="btn-reset" style="width:100%;margin-top:14px" onclick="closeLote()">Cerrar lote y empezar otro</button>' : ''}`;
+    ${!byMes && adm.view === adm.lote ? '<button class="btn-reset" style="width:100%;margin-top:14px" onclick="closeLote()">Cerrar lote y empezar otro</button>' : ''}`;
 }
 async function setEstado(row, estado) {
   if (estado === 'Anulado' && !confirm('¿Anular este pedido? Dejará de contar en los totales.')) return;
@@ -1138,12 +1150,19 @@ async function closeLote() {
     adm.view = d.lote; loadOrders();
   } catch (e) { alert('Error: ' + e.message); }
 }
+function adminCalc(i, from) {
+  const g = k => document.querySelector(`[data-k="${k}"]`);
+  const r2 = n => Math.round(n * 100) / 100;
+  const p = parseFloat(g('p' + i).value) || 0, c = parseFloat(g('c' + i).value) || 0, m = parseFloat(g('m' + i).value) || 0;
+  if (from === 'm') g('p' + i).value = r2(c + m); else g('m' + i).value = r2(p - c);
+}
 function renderAdmin() {
-  const inp = (k, v) => `<input type="number" step="0.5" min="0" data-k="${k}" value="${v}">`;
-  const row = (label, a, b) => `<div class="adm-row"><span style="flex:1">${esc(label)}</span>${a}${b || ''}</div>`;
+  const inp = (k, v, i, f) => `<input type="number" step="0.5" ${i == null ? 'min="0"' : ''} style="width:${i == null ? 90 : 72}px" data-k="${k}" value="${v}"${i != null ? ` oninput="adminCalc(${i},'${f}')"` : ''}>`;
+  const row = (label, cells) => `<div class="adm-row"><span style="flex:1">${esc(label)}</span>${cells}</div>`;
+  const th = t => `<span style="width:72px;text-align:right">${t}</span>`;
   document.getElementById('adminFields').innerHTML =
-    `<div class="adm-row" style="color:var(--muted);font-size:11px"><span style="flex:1">PRODUCTO</span><span style="width:90px;text-align:right">PRECIO</span><span style="width:90px;text-align:right">COSTE</span></div>` +
-    SHIRTS.map((s, i) => row(s.name, inp('p' + i, s.price), inp('c' + i, adm.costs[s.name] || 0))).join('') +
+    `<div class="adm-row" style="color:var(--muted);font-size:10px"><span style="flex:1">PRODUCTO</span>${th('VENTA')}${th('COSTE')}${th('BENEF.')}</div>` +
+    SHIRTS.map((s, i) => { const c = adm.costs[s.name] || 0; return row(s.name, inp('p' + i, s.price, i, 'p') + inp('c' + i, c, i, 'c') + inp('m' + i, Math.round((s.price - c) * 100) / 100, i, 'm')); }).join('') +
     EXTRAS.map(e => row('Extra: ' + e.label, inp('e_' + e.id, e.price))).join('') +
     row('Suplemento 3XL / 4XL', inp('big', BIG_EXTRA));
 }

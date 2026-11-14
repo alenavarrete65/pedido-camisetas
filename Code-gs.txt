@@ -98,7 +98,7 @@ function saveOrder_(d) {
   const t = v => { v = String(v == null ? '' : v).slice(0, 200); return /^[=+\-@]/.test(v) ? "'" + v : v; };
   const row = [t(d.fecha), t(d.equipo), t(d.equipacion), t(d.temporada), t(d.camiseta), t(d.talla), qty,
     t(d.nombre_camiseta), t(d.numero_camiseta), t(d.parches), t(d.contacto_nombre), t(d.contacto_telefono),
-    t(d.extras_resumen), totalNum, t(d.id), '', 'Pendiente', currentLote_(), costNum];
+    t(d.extras_resumen), totalNum, t(d.id), ''];
 
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
@@ -107,13 +107,15 @@ function saveOrder_(d) {
     const sh = ss.getSheetByName('Pedidos') || ss.insertSheet('Pedidos');
     if (sh.getLastRow() === 0) {
       sh.appendRow(['Fecha', 'Equipo', 'Equipación', 'Temporada', 'Producto', 'Talla', 'Cantidad', 'Nombre',
-        'Número', 'Parches', 'Cliente', 'Teléfono', 'Extras', 'Total', 'ID', 'Telegram', 'Estado', 'Lote', 'Coste']);
+        'Número', 'Parches', 'Cliente', 'Teléfono', 'Extras', 'Total', 'ID', 'Telegram']);
     }
-    if (sh.getRange(1, 17).getValue() === '') sh.getRange(1, 17, 1, 3).setValues([['Estado', 'Lote', 'Coste']]);
+    const [cE, cL, cC] = metaCols_(sh); // columnas Estado / Lote / Coste (se buscan por nombre)
     sh.appendRow(row);
     const r = sh.getLastRow();
     sh.getRange(r, 14).setNumberFormat('#,##0.00 "€"'); // formato dinero
-    sh.getRange(r, 19).setNumberFormat('#,##0.00 "€"');
+    sh.getRange(r, cE).setValue('Pendiente');
+    sh.getRange(r, cL).setValue(currentLote_());
+    sh.getRange(r, cC).setValue(costNum).setNumberFormat('#,##0.00 "€"');
 
     const msg = '🛒 NUEVO PEDIDO\n' +
       '👤 ' + row[10] + ' · ' + row[11] + '\n' +
@@ -166,18 +168,50 @@ function arreglarTotales() {
 // ═══ Pedidos, estados y lotes ═══
 function currentLote_() { return Number(PropertiesService.getScriptProperties().getProperty('LOTE') || 1); }
 
+// Las columnas de la app se buscan por su nombre en la fila 1 (y se crean al final si no existen),
+// así nunca pisan datos que ya tuvieras en tu hoja.
+const META = ['Estado pedido', 'Lote pedido', 'Coste pedido'];
+function metaCols_(sh) {
+  const lastCol = Math.max(sh.getLastColumn(), 16);
+  const head = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  let next = lastCol;
+  return META.map(name => {
+    const i = head.indexOf(name);
+    if (i >= 0) return i + 1;
+    next++;
+    sh.getRange(1, next).setValue(name);
+    return next;
+  });
+}
+
+function num_(v) {
+  if (typeof v === 'number') return v;
+  const n = parseFloat(String(v).replace('€', '').replace(/\s/g, '').replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+}
+
 function listOrders_() {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Pedidos');
-  const base = { ok: true, lote: currentLote_(), costs: getPrices_().costs, orders: [] };
+  const costs = getPrices_().costs;
+  const base = { ok: true, lote: currentLote_(), costs: costs, orders: [] };
   if (!sh || sh.getLastRow() < 2) return json_(base);
+  const [cE, cL, cC] = metaCols_(sh);
   const tz = Session.getScriptTimeZone();
-  base.orders = sh.getRange(2, 1, sh.getLastRow() - 1, 19).getValues().map((r, i) => ({
-    row: i + 2,
-    fecha: r[0] instanceof Date ? Utilities.formatDate(r[0], tz, 'dd/MM/yyyy HH:mm') : String(r[0]),
-    equipo: r[1], equipacion: r[2], temporada: r[3], producto: r[4], talla: r[5], cantidad: r[6],
-    extras: r[12], cliente: r[10], telefono: r[11],
-    total: Number(r[13]) || 0, estado: r[16] || 'Pendiente', lote: Number(r[17]) || 1, coste: Number(r[18]) || 0
-  }));
+  base.orders = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues().map((r, i) => {
+    const qty = Number(r[6]) || 1;
+    const stored = num_(r[cC - 1]);
+    return {
+      row: i + 2,
+      fecha: r[0] instanceof Date ? Utilities.formatDate(r[0], tz, 'dd/MM/yyyy HH:mm') : String(r[0]),
+      equipo: r[1], equipacion: r[2], temporada: r[3], producto: r[4], talla: r[5], cantidad: qty,
+      extras: r[12], cliente: r[10], telefono: r[11],
+      total: num_(r[13]),
+      estado: r[cE - 1] || 'Pendiente',
+      lote: Number(r[cL - 1]) || 1,
+      // si el pedido no tiene coste guardado, se calcula con el coste actual del producto
+      coste: stored > 0 ? stored : Math.round((costs[r[4]] || 0) * qty * 100) / 100
+    };
+  });
   return json_(base);
 }
 
@@ -186,7 +220,8 @@ function setStatus_(row, estado) {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Pedidos');
   row = parseInt(row);
   if (!(row >= 2 && row <= sh.getLastRow())) throw new Error('Fila no válida');
-  sh.getRange(row, 17).setValue(estado);
+  const cE = metaCols_(sh)[0];
+  sh.getRange(row, cE).setValue(estado);
   return json_({ ok: true });
 }
 
